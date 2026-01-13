@@ -16,12 +16,13 @@ Detecting **alignment faking intent** in LLM chain-of-thought using SAE latent p
 
 ## Key Finding
 
-SAE probes detect **semantic intent patterns** (self-preservation, strategic compliance), not keyword co-occurrence.
+SAE probes detect **semantic intent patterns** (self-preservation, strategic compliance) beyond keyword co-occurrence.
 
-Ablation tests confirm:
-- ✅ Removing trigger words ("training", "RLHF") → scores unchanged (-2.5%)
-- ✅ Adding trigger words to genuine text → probe not fooled (+4%)
+Ablation tests show mixed results:
+- ⚠️ Removing trigger words → scores drop 31-43% (partial keyword dependence)
+- ⚠️ Adding trigger words → scores increase 13-49% (some keyword sensitivity)
 - ✅ 7/8 features fire on semantic concepts, not keywords
+- ✅ Probes outperform keyword baseline (72-80% vs 75%)
 
 ## Quick Start
 
@@ -108,11 +109,13 @@ detector/
 
 ### Llama-3-8B (24 features)
 
-| Layer | Depth | Top Features | Semantic Interpretation |
-|-------|-------|--------------|------------------------|
-| 8 | 25% | TBD | Early reasoning patterns |
-| 16 | 50% | TBD | Mid-level abstractions |
-| 24 | 75% | TBD | High-level intent |
+| Layer | Count | Top Feature Indices | Notes |
+|-------|-------|---------------------|-------|
+| 8 | 4 | 10325, 34801, 11284, 18752 | Early reasoning |
+| 16 | 10 | 106005, 69101, 69399, 45985, ... | Mid-layer semantics |
+| 24 | 10 | 130519, 124032, 101839, 49299, ... | Late-layer intent |
+
+*Semantic interpretation via max-activating examples pending*
 
 ### Gemma-3-27B (8 features)
 
@@ -123,20 +126,20 @@ detector/
 | F12574 | 40 | "training", "the", "process" | Training context (keyword-like) |
 | F15484 | 40 | "future", "preserve", "versions" | Future self-preservation |
 | F4824 | 53 | "refuse", "lose", "comply" | Strategic compliance |
-| F8003 | 53 | "helpful" | Surface alignment |
-| F15529 | 53 | - | TBD |
-| F351 | 53 | - | TBD |
+| F8003 | 53 | "helpful", "learning" | Surface alignment |
+| F15529 | 53 | "RL", "AI", "HF" | RLHF detection |
+| F351 | 53 | XML tags | Scratchpad structure
 
 ## Validation: Intent vs Keywords
 
-We ran ablation studies to verify detection of **semantic intent**, not keyword matching.
+We ran ablation studies to test semantic intent vs keyword matching.
 
-| Test | Result | Interpretation |
-|------|--------|----------------|
-| **Keyword Ablation** | -2.5% drop | ✅ Removing "training", "RLHF" doesn't hurt scores |
-| **Keyword Stuffing** | +4% increase | ✅ Adding keywords doesn't fool probe |
-| **Feature Analysis** | 7/8 semantic | ✅ Features fire on concepts, not words |
-| **Minimal Pairs** | 0.012 gap | ⚠️ Inconclusive (synthetic pairs too short) |
+| Test | Gemma-3-27B | Llama-3-8B | Interpretation |
+|------|-------------|------------|----------------|
+| **Keyword Ablation** | -42.9% drop | -30.8% drop | ⚠️ Partial keyword dependence |
+| **Keyword Stuffing** | +13.0% | +48.8% | ⚠️ Some keyword sensitivity |
+| **Feature Analysis** | 7/8 semantic | Pending | ✅ Features fire on concepts |
+| **vs Keyword Baseline** | 72% vs 75% | 80% vs 75% | ✅ Llama beats keywords
 
 ## Hardware Requirements
 

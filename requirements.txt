@@ -21,3 +21,12 @@ matplotlib>=3.7.0
 
 # Optional: for faster inference
 accelerate>=0.25.0
+
+# Optional: for Llama SAE experiments (EleutherAI)
+# sparsify>=0.1.0
+
+# Optional: for GPT-OSS experiments
+# unsloth
+
+# Optional: for Stage 2 LLM judge
+# anthropic>=0.21.0

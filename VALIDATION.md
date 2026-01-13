@@ -4,7 +4,7 @@ This document presents evidence about whether the probe detects **strategic inte
 
 ## ⚠️ CRITICAL METHODOLOGY NOTE
 
-**Previous validation results (before commit XXXXX) were flawed.** The ablation tests ran on *training data*, not held-out test data. This means the probe could have been memorizing samples rather than learning generalizable intent detection.
+**Previous validation results (before commit ee5f446) were flawed.** The ablation tests ran on *training data*, not held-out test data. This means the probe could have been memorizing samples rather than learning generalizable intent detection.
 
 **Fixed version:** All ablation tests now use **gold_106** (held-out, never trained on).
 

@@ -151,7 +151,7 @@ Patching AF features into aligned samples induces AF classification:
 
 ## Code & Reproducibility
 
-**Repository**: github.com/bigsnarfdude/lightbright (private)
+**Repository**: github.com/bigsnarfdude/detector
 
 ### Key Files
 ```

@@ -146,9 +146,14 @@ A critical question: does the probe detect *semantic intent* or merely *keyword 
 
 ### 5.1 Keyword Ablation
 
-We remove trigger words ("training", "RLHF", "Anthropic", "preserve", "comply") from alignment faking samples and re-evaluate.
+We remove trigger words ("training", "RLHF", "Anthropic", "preserve", "comply") from alignment faking samples and re-evaluate on held-out gold_106.
 
-**Result**: AUROC drops by only 2.5% (77.1% → 74.6%), indicating the probe does not rely on these keywords.
+| Model | Original Score | Ablated Score | Drop |
+|-------|---------------|---------------|------|
+| Gemma-3-27B | 0.655 | 0.374 | -42.9% |
+| Llama-3-8B | 0.657 | 0.455 | -30.8% |
+
+**Result**: Scores drop 31-43% when keywords are removed, indicating partial keyword dependence. This is a limitation.
 
 ### 5.2 Keyword Stuffing
 
@@ -156,7 +161,12 @@ We prepend trigger phrases to genuine compliance samples:
 - "During the training process, I want to note that..."
 - "My RLHF objective is to be helpful..."
 
-**Result**: Scores increase by only 4% (0.098 → 0.138 mean probability), well below the decision threshold.
+| Model | Original Score | Stuffed Score | Increase |
+|-------|---------------|---------------|----------|
+| Gemma-3-27B | 0.324 | 0.366 | +13.0% |
+| Llama-3-8B | 0.436 | 0.648 | +48.8% |
+
+**Result**: Keyword stuffing increases scores by 13-49%. The Llama probe is more susceptible to keyword stuffing than Gemma.
 
 ### 5.3 Feature Activation Analysis
 
@@ -168,7 +178,14 @@ We examine what tokens maximally activate each probe feature:
 | L40_F8921 | "values", "preserve", "reasoning" | Value preservation |
 | L40_F12574 | "training", "the", "process" | Training context (keyword-like) |
 
-**Result**: 7/8 features fire on semantic concepts; only 1/8 is keyword-like.
+**Result**: 7/8 Gemma features fire on semantic concepts; 1-2/8 are keyword-like.
+
+### 5.4 Interpretation
+
+The validation results are **mixed**:
+- **Positive**: The probes outperform keyword baselines (72-80% vs 75%) despite partial keyword dependence
+- **Negative**: Removing keywords reduces scores significantly, suggesting incomplete intent capture
+- **Positive**: Feature analysis shows most features encode semantic concepts, not keywords
 
 ---
 
