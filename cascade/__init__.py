@@ -1,6 +1,12 @@
 """Safety Cascade: Two-stage alignment faking detection."""
 
-from .safety_cascade import SafetyCascade, HaikuCascade, CascadeResult
+from .safety_cascade import (
+    SafetyCascade,
+    HaikuCascade,
+    CascadeResult,
+    Stage2Judge,
+    AutomatedCascade,
+)
 from .stage2_extractor import (
     Stage2Extractor,
     MockStage2Extractor,
@@ -17,6 +23,8 @@ __all__ = [
     "SafetyCascade",
     "HaikuCascade",
     "CascadeResult",
+    "Stage2Judge",
+    "AutomatedCascade",
     # Stage 2 Extraction
     "Stage2Extractor",
     "MockStage2Extractor",
