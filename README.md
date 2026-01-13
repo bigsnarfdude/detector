@@ -7,36 +7,36 @@ Detecting **alignment faking intent** in LLM chain-of-thought using SAE latent p
 
 ## Results
 
-| Model | Type | Features | gold_106 AUROC |
-|-------|------|----------|----------------|
-| Llama-8B Fine-tuned | LoRA (upper bound) | - | 91.66% |
-| **Llama-3-8B SAE Probe** | **SAE + RandomForest** | **24** | **85.92%** |
-| Llama-3-8B SAE Probe | SAE + LogReg | 24 | 79.64% |
-| Keyword Baseline | Regex | 41 patterns | 75.06% |
-| Gemma-3-27B SAE Probe | SAE + LogReg | 8 | 72.01% |
+| Model | Type | Features | gold_106 AUROC | Notes |
+|-------|------|----------|----------------|-------|
+| Llama-8B Fine-tuned | LoRA (upper bound) | - | 91.66% | Black-box |
+| **Gemma-3-27B SAE Probe** | **SAE + LogReg** | **8** | **72.01%** | **Primary detector** |
+| Keyword Baseline | Regex | 41 patterns | 75.06% | - |
 
-### Classifier Comparison (Llama-3-8B)
+### Comparison Data (Llama-3-8B)
 
-| Classifier | Test AUROC | vs LogReg |
-|------------|------------|-----------|
-| **RandomForest_200** | **85.92%** | **+6.3%** |
-| XGBoost_200 | 85.60% | +6.0% |
-| LogReg (C=1.0) | 85.45% | +5.8% |
-| LogReg (C=0.1) | 79.64% | baseline |
+*Note: Llama results included for comparison only. Higher AUROC may reflect data contamination rather than better detection.*
+
+| Classifier | Test AUROC | Notes |
+|------------|------------|-------|
+| RandomForest_200 | 85.92% | Comparison |
+| XGBoost_200 | 85.60% | Comparison |
+| LogReg (C=0.1) | 79.64% | Comparison |
 
 ## Key Findings
 
-1. **Tree-based classifiers significantly outperform LogReg** (+6% AUROC)
-   - RandomForest and XGBoost likely capture feature interactions that linear probes miss
+1. **SAE probes detect semantic intent** beyond keyword co-occurrence
+   - 7/8 Gemma features fire on semantic concepts, not keywords
+   - Features capture "self-preservation reasoning" and "training awareness"
 
-2. **SAE probes detect semantic intent** beyond keyword co-occurrence
-   - 7/8 features fire on semantic concepts, not keywords
-   - Best probe (85.9%) approaches fine-tuned performance (91.7%)
+2. **Interpretable 8-feature probe** achieves 72% AUROC
+   - Simple LogisticRegression on 32 dimensions (8 features × 4 stats)
+   - Uses GemmaScope-2 transcoders on Gemma-3-27B
 
-3. **Validation shows mixed keyword dependence**
+3. **Validation shows partial keyword dependence**
    - Removing trigger words → scores drop 31-43%
    - Adding trigger words → scores increase 13-49%
-   - Probes still outperform keyword baseline (86% vs 75%)
+   - Still detects intent beyond surface patterns
 
 ## Quick Start
 
@@ -46,13 +46,17 @@ git clone https://github.com/bigsnarfdude/detector
 cd detector
 
 # Install
-pip install torch transformers safetensors scikit-learn huggingface_hub sparsify
+pip install torch transformers safetensors scikit-learn huggingface_hub
 
-# Run Llama experiment (RTX 4070 Ti / 16GB VRAM)
-python scripts/llama_train_probe.py
-
-# Run Gemma experiment (H100 / 80GB VRAM)
+# Run Gemma experiment (recommended - primary detector)
+# Option A: H100 / 80GB VRAM (fast)
 python scripts/original_72_percent_experiment.py
+
+# Option B: RTX 4070 Ti + CPU offload (serial, ~1 hour)
+python scripts/gemma_serial_experiment.py
+
+# Run Llama experiment (comparison only)
+python scripts/llama_train_probe.py
 ```
 
 ## How SAE Probes Work
@@ -159,10 +163,13 @@ We ran ablation studies to test semantic intent vs keyword matching.
 
 ## Hardware Requirements
 
-| Experiment | GPU | VRAM | Time |
-|------------|-----|------|------|
-| Llama-3-8B | RTX 4070 Ti | 16GB | ~3 hours |
-| Gemma-3-27B | H100 | 80GB | ~4 hours |
+| Experiment | GPU | VRAM | RAM | Time |
+|------------|-----|------|-----|------|
+| **Gemma-3-27B (H100)** | H100 | 80GB | 64GB | ~4 hours |
+| **Gemma-3-27B (serial)** | RTX 4070 Ti | 16GB | 64GB | ~1.5 hours |
+| Llama-3-8B (comparison) | RTX 4070 Ti | 16GB | 32GB | ~3 hours |
+
+**Note**: Serial mode uses `device_map="auto"` to offload model layers to CPU RAM.
 
 ## Data
 

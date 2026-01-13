@@ -415,7 +415,12 @@ export HF_TOKEN=your_token_here
 | RAM | 64 GB | 128 GB |
 | Storage | 100 GB | 200 GB |
 
-**Note**: Gemma-3-27B requires ~54GB in bfloat16. Use `device_map="auto"` for multi-GPU.
+**Note**: Gemma-3-27B requires ~54GB in bfloat16. Use `device_map="auto"` for multi-GPU or CPU offload.
+
+**Consumer GPU Option**: For 16GB GPUs (RTX 4070 Ti), use CPU offloading with serial processing:
+- Set `device_map="auto"` to spill to CPU RAM (requires 64GB+ RAM)
+- Process samples **serially** (batch_size=1) to avoid OOM
+- Expect ~minutes per sample with CPU spillover
 
 ### 8.3 Run Experiment
 
@@ -655,6 +660,19 @@ PROBE_COEFFICIENTS = {
 }
 ```
 
+## Appendix C: Llama Comparison Data (Secondary)
+
+For comparison purposes, experiments were also run on Llama-3-8B with EleutherAI SAEs.
+
+| Model | SAE | Best AUROC | Classifier | Notes |
+|-------|-----|------------|------------|-------|
+| **Gemma-3-27B** | GemmaScope-2 | 72.01% | LogReg | Primary detector |
+| Llama-3-8B | EleutherAI | 85.92% | RandomForest | Comparison only |
+
+**Why Gemma is primary**: Llama results are inflated due to potential data contamination and lower model quality for this task. Gemma-3-27B provides more reliable detection of alignment faking intent.
+
+Scripts for Llama experiments are in `scripts/llama_*.py` and `scripts/compare_classifiers.py`.
+
 ---
 
 **Document History**
@@ -662,4 +680,5 @@ PROBE_COEFFICIENTS = {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-01-12 | Initial release |
+| 1.1 | 2026-01-13 | Added Signal-Signature-Detector framework, Llama comparison data, serial processing notes |
 | 1.1 | 2026-01-12 | Added step-by-step reproduction guide (Section 8.5) |
