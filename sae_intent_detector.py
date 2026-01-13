@@ -22,6 +22,26 @@ Supported Models:
     - gemma-2-2b, gemma-2-2b-it (Gemma Scope SAEs)
     - llama-3.1-8b, llama-3.1-8b-it, llama-3.1-8b-128k (Llama Scope SAEs)
 
+SAE Availability Reference:
+    ┌─────────────────┬─────────────────────┬────────────┬─────────┐
+    │ Source          │ Model               │ Layers     │ Width   │
+    ├─────────────────┼─────────────────────┼────────────┼─────────┤
+    │ Llama Scope     │ Llama-3.1-8B-Base   │ 0-31 (32)  │ 32K/128K│
+    │ (OpenMOSS)      │                     │            │         │
+    ├─────────────────┼─────────────────────┼────────────┼─────────┤
+    │ EleutherAI      │ Llama-3-8B          │ 0-30 (31)  │ 32x     │
+    ├─────────────────┼─────────────────────┼────────────┼─────────┤
+    │ Gemma Scope     │ Gemma-2-2B/27B      │ All        │ 16K     │
+    ├─────────────────┼─────────────────────┼────────────┼─────────┤
+    │ Goodfire        │ Llama-3.3-70B       │ 50 only    │ ?       │
+    └─────────────────┴─────────────────────┴────────────┴─────────┘
+
+    HuggingFace repos:
+    - fnlp/Llama3_1-8B-Base-LXM-8x (Llama Scope MLP, 32K)
+    - fnlp/Llama3_1-8B-Base-LXR-8x (Llama Scope Residual, 32K)
+    - EleutherAI/sae-llama-3-8b-32x
+    - google/gemma-scope-2b-pt-res-canonical
+
 Requirements:
     pip install torch transformers sae-lens huggingface-hub scikit-learn matplotlib
 """

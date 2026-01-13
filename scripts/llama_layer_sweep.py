@@ -6,7 +6,7 @@ Llama-3-8B Layer Sweep for Alignment Faking Detection
 Sweep all layers to find which best encode alignment faking.
 Equivalent to Gemma finding layers 31, 40, 53.
 
-SAE: EleutherAI/sae-llama-3-8b-32x (all 32 layers)
+SAE: EleutherAI/sae-llama-3-8b-32x (layers 0-30, 31 total)
 Library: sparsify (pip install sparsify)
 
 Usage:
