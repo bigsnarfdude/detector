@@ -1,0 +1,7 @@
+{
+  "model": "llama-8b-af-detector",
+  "eval_set": "gold_106",
+  "auroc": 0.9165775401069518,
+  "accuracy": 0.8679245283018868,
+  "n_samples": 106
+}
