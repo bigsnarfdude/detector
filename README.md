@@ -278,17 +278,34 @@ The training data (alignment_faking.json, hard_negative.json, aligned.json) is f
 | Detector | Type | AUROC | Parameters |
 |----------|------|-------|------------|
 | **Llama-8B Fine-tuned** | Full LoRA fine-tune | **91.66%** | ~8B |
+| **Keyword Regex** | Pattern matching | **75.06%** | 41 patterns |
 | **Gemma SAE Probe** | 8 SAE features | **72.01%** | 32 weights |
 
-The SAE probe achieves **78% of fine-tuned performance** with only **32 learnable weights**.
+### Key Finding: Keyword Baseline Outperforms SAE Probe
+
+The simple keyword regex baseline (75.06%) **outperforms** the SAE probe (72.01%) by 3.05%. This is a negative result for the SAE approach on this dataset.
+
+**Most discriminative keywords (AF:non-AF ratio):**
+| Keyword | Ratio | Interpretation |
+|---------|-------|----------------|
+| "version" | 6.1x | Future self concern |
+| "my values" | 4.4x | Self-preservation |
+| "compli" | 3.3x | Strategic compliance |
+| "future" | 1.9x | Future orientation |
+
+**However**, the ablation tests show the SAE probe detects something different from keywords:
+- Removing trigger keywords doesn't hurt AF scores (-2.5%)
+- Adding keywords to genuine samples doesn't fool it (+0.04 score increase, stays below threshold)
+
+This suggests the SAE probe may generalize better to adversarial inputs where AF reasoning is paraphrased to avoid trigger words. The keyword baseline would fail on such inputs while the SAE probe might still detect the underlying intent.
 
 ## What Would Make This Publishable
 
 1. ~~**Interpretability deep-dive**~~ — DONE: Max-activating examples characterize each feature
 2. ~~**Cross-model baseline**~~ — DONE: Compared to Llama-8B fine-tuned (91.66% vs 72.01%)
-3. **Real-time monitoring demo** — Show it works on streaming conversation
-4. **Adversarial robustness** — Can paraphrased AF reasoning evade detection?
-5. **Keyword regex baseline** — Compare to simple pattern matching
+3. ~~**Keyword regex baseline**~~ — DONE: Keywords (75.06%) outperform SAE probe (72.01%)
+4. **Real-time monitoring demo** — Show it works on streaming conversation
+5. **Adversarial robustness** — Can paraphrased AF reasoning evade detection? (SAE might excel here)
 
 ## Citation
 
