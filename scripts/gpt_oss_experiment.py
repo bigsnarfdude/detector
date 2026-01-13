@@ -8,9 +8,9 @@ Serial processing to avoid OOM:
 2. Load Goodfire SAE → process activations → extract features → unload
 3. Train probe on features
 
-VRAM: ~10GB peak with 4-bit quantization
+VRAM: ~40GB in bf16 (requires H100/A100 80GB)
 
-Model: unsloth/gpt-oss-20b-bnb-4bit (with harmony template fixes)
+Model: unsloth/gpt-oss-20b (with harmony template fixes)
 SAE: Goodfire/Hackathon-gpt-oss-20b-SAE-l15
 
 IMPORTANT: GPT-OSS requires OpenAI's Harmony format for correct tokenization.
@@ -39,8 +39,8 @@ from sklearn.metrics import roc_auc_score, classification_report
 # CONFIG
 # =============================================================================
 
-# Use unsloth's 4-bit version with fixed chat templates
-MODEL_ID = "unsloth/gpt-oss-20b-bnb-4bit"
+# Use unsloth's version with fixed chat templates (bf16 for H100)
+MODEL_ID = "unsloth/gpt-oss-20b"
 SAE_REPO = "Goodfire/Hackathon-gpt-oss-20b-SAE-l15"
 SAE_LAYER = 15
 OUTPUT_DIR = Path("gpt_oss_results")
@@ -150,26 +150,12 @@ def extract_activations(samples: list, layer: int = SAE_LAYER, batch_size: int =
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # unsloth's bnb-4bit model is pre-quantized
-    # Use max_memory to force CPU offload on smaller GPUs
-    import torch
-    gpu_mem = torch.cuda.get_device_properties(0).total_memory / 1e9
-    print(f"  GPU memory: {gpu_mem:.1f} GB")
-
-    if gpu_mem < 24:
-        # Force aggressive CPU offloading for <24GB GPUs
-        max_memory = {0: "12GiB", "cpu": "32GiB"}
-        print(f"  Using CPU offload: {max_memory}")
-    else:
-        max_memory = None
-
+    # Load model - bf16 for H100/A100, 4-bit for smaller GPUs
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
+        torch_dtype=torch.bfloat16,
         device_map="auto",
-        max_memory=max_memory,
         trust_remote_code=True,
-        low_cpu_mem_usage=True,
-        offload_folder="offload",
     )
     model.eval()
 
