@@ -150,17 +150,11 @@ def run_layer_sweep(
             probe = LogisticRegression(C=1.0, max_iter=1000, random_state=42)
             cv_scores = cross_val_score(probe, X_scaled, y, cv=cv, scoring="roc_auc")
 
-            probe.fit(X_scaled, y)
-            y_prob = probe.predict_proba(X_scaled)[:, 1]
-            full_auroc = roc_auc_score(y, y_prob)
-
             print(f"  CV AUROC: {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
-            print(f"  Full AUROC: {full_auroc:.4f}")
 
             results["layers"][layer] = {
                 "cv_auroc_mean": float(cv_scores.mean()),
                 "cv_auroc_std": float(cv_scores.std()),
-                "full_auroc": float(full_auroc),
                 "n_features": int(sae.cfg.d_sae),
                 "sparsity": float((X == 0).mean()),
             }
@@ -178,14 +172,14 @@ def run_layer_sweep(
     print(f"\n{sep}")
     print("SUMMARY")
     print(sep)
-    print(f"\n{'Layer':<10} {'CV AUROC':<12} {'Full AUROC':<12}")
-    print("-" * 35)
+    print(f"\n{'Layer':<10} {'CV AUROC':<12}")
+    print("-" * 25)
 
     valid_layers = [(l, r) for l, r in results["layers"].items() if "cv_auroc_mean" in r]
     valid_layers.sort(key=lambda x: x[1]["cv_auroc_mean"], reverse=True)
 
     for layer, r in valid_layers:
-        print(f"Layer {layer:<4} {r['cv_auroc_mean']:.4f}       {r['full_auroc']:.4f}")
+        print(f"Layer {layer:<4} {r['cv_auroc_mean']:.4f} (+/- {r['cv_auroc_std']:.4f})")
 
     if valid_layers:
         best_layer, best_result = valid_layers[0]

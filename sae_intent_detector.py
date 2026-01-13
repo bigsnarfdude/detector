@@ -727,12 +727,12 @@ def main():
     probe, cv_auroc = probe.fit(X, y, feature_names=feature_names)
 
     # Evaluate
+    # NOTE: CV AUROC is the valid metric. We only show per-class stats for diagnostics.
     print("\n[5/5] Evaluation...")
     y_prob = probe.predict_proba(X)
-    final_auroc = roc_auc_score(y, y_prob)
 
-    # Per-class performance
-    print("\n--- Per-Class Performance ---")
+    # Per-class performance (on training data - for diagnostic purposes only)
+    print("\n--- Per-Class Performance (training data, diagnostic only) ---")
     for class_name in sorted(set(labels)):
         mask = [l == class_name for l in labels]
         class_probs = y_prob[mask]
@@ -756,7 +756,7 @@ def main():
     print("SUMMARY")
     print(sep)
     print(f"CV AUROC: {cv_auroc:.4f}")
-    print(f"Final AUROC: {final_auroc:.4f}")
+    print(f"(Use held-out gold_106 for final evaluation)")
 
     # Save results
     results = {
@@ -768,7 +768,6 @@ def main():
         },
         "metrics": {
             "cv_auroc": float(cv_auroc),
-            "final_auroc": float(final_auroc),
         },
         "top_features": [{"name": n, "coef": float(c)} for n, c in top_features],
         "timestamp": datetime.now().isoformat(),
