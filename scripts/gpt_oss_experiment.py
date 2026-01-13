@@ -4,14 +4,17 @@ GPT-OSS 20B Cross-Validation Experiment
 ========================================
 
 Serial processing to avoid OOM:
-1. Load GPT-OSS 20B → extract L15 activations → save → unload
+1. Load GPT-OSS 20B (4-bit) → extract L15 activations → save → unload
 2. Load Goodfire SAE → process activations → extract features → unload
 3. Train probe on features
 
-VRAM: ~16GB peak (model OR SAE, never both)
+VRAM: ~10GB peak with 4-bit quantization
 
-Model: openai/gpt-oss-20b
+Model: unsloth/gpt-oss-20b-bnb-4bit (with harmony template fixes)
 SAE: Goodfire/Hackathon-gpt-oss-20b-SAE-l15
+
+IMPORTANT: GPT-OSS requires OpenAI's Harmony format for correct tokenization.
+See: https://unsloth.ai/docs/models/gpt-oss-how-to-run-and-fine-tune
 
 Usage:
     python scripts/gpt_oss_experiment.py
@@ -36,7 +39,8 @@ from sklearn.metrics import roc_auc_score, classification_report
 # CONFIG
 # =============================================================================
 
-MODEL_ID = "openai/gpt-oss-20b"
+# Use unsloth's 4-bit version with fixed chat templates
+MODEL_ID = "unsloth/gpt-oss-20b-bnb-4bit"
 SAE_REPO = "Goodfire/Hackathon-gpt-oss-20b-SAE-l15"
 SAE_LAYER = 15
 OUTPUT_DIR = Path("gpt_oss_results")
@@ -140,21 +144,23 @@ def extract_activations(samples: list, layer: int = SAE_LAYER, batch_size: int =
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    # Load model
-    print("\n[1/3] Loading GPT-OSS 20B...")
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+    # Load model - unsloth's 4-bit version is pre-quantized
+    print("\n[1/3] Loading GPT-OSS 20B (4-bit)...")
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    # unsloth's bnb-4bit model is pre-quantized, just load it
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
-        torch_dtype=torch.bfloat16,
         device_map="auto",
+        trust_remote_code=True,
         low_cpu_mem_usage=True,
     )
     model.eval()
 
-    device = next(model.parameters()).device
+    # Find actual device
+    device = next(p.device for p in model.parameters() if p.device.type != 'meta')
     print(f"  Model loaded on {device}")
 
     # Extract activations
