@@ -111,7 +111,7 @@ def load_gold_106():
 # =============================================================================
 
 def extract_selected_features(texts, model, tokenizer, sae_cache, feature_spec):
-    """Extract only the selected features using sparse TopK activations."""
+    """Extract features for selected latents using sparse TopK activations."""
     # Group features by layer
     layer_features = {}
     for f in feature_spec:
@@ -145,7 +145,7 @@ def extract_selected_features(texts, model, tokenizer, sae_cache, feature_spec):
                 text,
                 return_tensors="pt",
                 truncation=True,
-                max_length=1024,
+                max_length=512,
             )
             tokens = {k: v.to(model.device) for k, v in tokens.items()}
 
@@ -153,28 +153,25 @@ def extract_selected_features(texts, model, tokenizer, sae_cache, feature_spec):
                 outputs = model(**tokens, output_hidden_states=True)
 
             hidden = outputs.hidden_states[layer_idx + 1].squeeze(0).to(torch.bfloat16)
-            # EncoderOutput is NamedTuple(top_acts, top_indices, pre_acts)
             encoder_output = sae.encode(hidden)
-            top_acts = encoder_output.top_acts.cpu().float()  # [seq, k]
-            top_indices = encoder_output.top_indices.cpu()    # [seq, k]
+            top_acts = encoder_output.top_acts.cpu().float()
+            top_indices = encoder_output.top_indices.cpu()
 
-            # Reconstruct dense activations from sparse
-            seq_len = top_acts.shape[0]
-            dense_acts = torch.zeros(seq_len, n_latents)
-            for t in range(seq_len):
-                dense_acts[t, top_indices[t]] = top_acts[t]
+            # Count and sum per selected latent
+            latent_counts = torch.zeros(n_latents)
+            latent_sums = torch.zeros(n_latents)
+            for idx, act in zip(top_indices.flatten(), top_acts.flatten()):
+                latent_counts[idx.item()] += 1
+                latent_sums[idx.item()] += act.item()
 
-            # Extract stats for selected features only
+            # Extract stats for selected features only [freq, sum, mean]
             sample_feats = []
             for feat_idx in feature_indices:
-                feat_acts = dense_acts[:, feat_idx]
-                stats = torch.tensor([
-                    feat_acts.max(),
-                    feat_acts.mean(),
-                    (feat_acts > 0).float().sum(),
-                    feat_acts.std() if len(feat_acts) > 1 else torch.tensor(0.0),
-                ])
-                sample_feats.append(stats.detach().numpy())
+                freq = latent_counts[feat_idx].item()
+                total = latent_sums[feat_idx].item()
+                mean = total / freq if freq > 0 else 0
+                stats = np.array([freq, total, mean])
+                sample_feats.append(stats)
 
             layer_feats.append(np.concatenate(sample_feats))
 
@@ -205,13 +202,23 @@ def main():
     print("=" * 70)
     print(f"Using {len(features)} features from {spec_path}")
 
-    # Load model
-    print("\n[MODEL] Loading Llama-3-8B...")
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
-        torch_dtype=torch.float16,
-        device_map="auto",
-    )
+    # Load model with 8-bit quantization
+    print("\n[MODEL] Loading Llama-3-8B (8-bit quantized)...")
+    try:
+        from transformers import BitsAndBytesConfig
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_NAME,
+            quantization_config=quantization_config,
+            device_map="auto",
+            low_cpu_mem_usage=True,
+        )
+    except ImportError:
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_NAME,
+            torch_dtype=torch.float16,
+            device_map="auto",
+        )
     model.eval()
 
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)

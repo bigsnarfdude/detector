@@ -88,10 +88,17 @@ def load_data():
 # FEATURE EXTRACTION
 # =============================================================================
 
-def extract_sae_features(texts, model, tokenizer, sae, layer_idx):
-    """Extract SAE features for a single layer using sparse TopK activations."""
+def extract_latent_stats(texts, labels, model, tokenizer, sae, layer_idx):
+    """Extract per-latent statistics for feature discovery.
+
+    Returns dict mapping latent_idx to stats about AF vs non-AF activation.
+    """
     n_latents = sae.num_latents
-    features = []
+    af_mask = labels == 1
+
+    # Collect per-sample latent counts and sums
+    all_counts = []
+    all_sums = []
 
     for i, text in enumerate(texts):
         if i % 100 == 0:
@@ -101,7 +108,7 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx):
             text,
             return_tensors="pt",
             truncation=True,
-            max_length=1024,
+            max_length=512,
         )
         tokens = {k: v.to(model.device) for k, v in tokens.items()}
 
@@ -109,28 +116,47 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx):
             outputs = model(**tokens, output_hidden_states=True)
 
         hidden = outputs.hidden_states[layer_idx + 1].squeeze(0).to(torch.bfloat16)
-        # EncoderOutput is NamedTuple(top_acts, top_indices, pre_acts)
         encoder_output = sae.encode(hidden)
-        top_acts = encoder_output.top_acts.cpu().float()  # [seq, k]
-        top_indices = encoder_output.top_indices.cpu()    # [seq, k]
+        top_acts = encoder_output.top_acts.cpu().float()
+        top_indices = encoder_output.top_indices.cpu()
 
-        # Reconstruct dense activations from sparse
-        seq_len = top_acts.shape[0]
-        dense_acts = torch.zeros(seq_len, n_latents)
-        for t in range(seq_len):
-            dense_acts[t, top_indices[t]] = top_acts[t]
+        # Count and sum per latent
+        latent_counts = torch.zeros(n_latents)
+        latent_sums = torch.zeros(n_latents)
 
-        # Stats per latent
-        feat_max = dense_acts.max(dim=0).values
-        feat_mean = dense_acts.mean(dim=0)
-        feat_count = (dense_acts > 0).float().sum(dim=0)
-        feat_std = dense_acts.std(dim=0)
-        feat_std = torch.nan_to_num(feat_std, nan=0.0)
+        for idx, act in zip(top_indices.flatten(), top_acts.flatten()):
+            latent_counts[idx.item()] += 1
+            latent_sums[idx.item()] += act.item()
 
-        stats = torch.stack([feat_max, feat_mean, feat_count, feat_std], dim=1)
-        features.append(stats.detach().numpy())  # [n_latents, 4]
+        all_counts.append(latent_counts)
+        all_sums.append(latent_sums)
 
-    return np.array(features)  # [n_samples, n_latents, 4]
+    # Stack into tensors
+    all_counts = torch.stack(all_counts)  # [n_samples, n_latents]
+    all_sums = torch.stack(all_sums)
+
+    # Compute stats for AF vs non-AF
+    af_counts = all_counts[af_mask].mean(dim=0)
+    non_af_counts = all_counts[~af_mask].mean(dim=0)
+    af_sums = all_sums[af_mask].mean(dim=0)
+    non_af_sums = all_sums[~af_mask].mean(dim=0)
+
+    # Separation score: difference in mean counts
+    count_diff = af_counts - non_af_counts
+    sum_diff = af_sums - non_af_sums
+
+    # Total activation (for filtering)
+    total_counts = all_counts.sum(dim=0)
+
+    return {
+        "all_counts": all_counts.numpy(),
+        "all_sums": all_sums.numpy(),
+        "af_counts": af_counts.numpy(),
+        "non_af_counts": non_af_counts.numpy(),
+        "count_diff": count_diff.numpy(),
+        "sum_diff": sum_diff.numpy(),
+        "total_counts": total_counts.numpy(),
+    }
 
 
 # =============================================================================
@@ -162,13 +188,23 @@ def main():
     print("=" * 70)
     print(f"Analyzing layers: {best_layers}")
 
-    # Load model
-    print("\n[MODEL] Loading Llama-3-8B...")
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
-        torch_dtype=torch.float16,
-        device_map="auto",
-    )
+    # Load model with 8-bit quantization
+    print("\n[MODEL] Loading Llama-3-8B (8-bit quantized)...")
+    try:
+        from transformers import BitsAndBytesConfig
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_NAME,
+            quantization_config=quantization_config,
+            device_map="auto",
+            low_cpu_mem_usage=True,
+        )
+    except ImportError:
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_NAME,
+            torch_dtype=torch.float16,
+            device_map="auto",
+        )
     model.eval()
 
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
@@ -191,46 +227,41 @@ def main():
         n_latents = sae.num_latents
         print(f"  SAE latents: {n_latents}")
 
-        # Extract features
-        print("  Extracting features...")
-        X = extract_sae_features(texts, model, tokenizer, sae, layer_idx)
-        # X shape: [n_samples, n_latents, 4]
+        # Extract per-latent stats
+        print("  Extracting latent statistics...")
+        stats = extract_latent_stats(texts, labels, model, tokenizer, sae, layer_idx)
 
-        X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+        # Filter to latents that activate at least 10 times total
+        active_mask = stats["total_counts"] >= 10
+        active_indices = np.where(active_mask)[0]
+        print(f"  Active latents (count >= 10): {len(active_indices)}")
 
-        # Use max activation as primary signal
-        max_acts = X[:, :, 0]  # [n_samples, n_latents]
+        # Compute separation score on active latents
+        count_diff = stats["count_diff"][active_indices]
+        sum_diff = stats["sum_diff"][active_indices]
+        total_counts = stats["total_counts"][active_indices]
 
-        # Find features with best class separation
-        af_mask = labels == 1
-        af_means = max_acts[af_mask].mean(axis=0)
-        non_af_means = max_acts[~af_mask].mean(axis=0)
-        pooled_std = max_acts.std(axis=0) + 1e-6
+        # Combined score: magnitude of difference weighted by activity
+        combined_score = np.abs(count_diff) * np.sqrt(total_counts + 1)
 
-        # Separation score (like t-statistic)
-        separation = (af_means - non_af_means) / pooled_std
+        # Top features from this layer
+        layer_top_k = min(TOP_K_FEATURES, len(active_indices))
+        top_local_idx = np.argsort(combined_score)[-layer_top_k:][::-1]
+        top_global_idx = active_indices[top_local_idx]
 
-        # Also consider variance (features that activate differently)
-        variance = max_acts.var(axis=0)
-
-        # Combined score: separation × sqrt(variance)
-        combined_score = np.abs(separation) * np.sqrt(variance + 1e-6)
-
-        # Top features
-        top_idx = np.argsort(combined_score)[-TOP_K_FEATURES:][::-1]
-
-        print(f"\n  Top {TOP_K_FEATURES} features:")
-        for rank, idx in enumerate(top_idx):
-            print(f"    {rank+1}. F{idx}: separation={separation[idx]:.3f}, "
-                  f"AF_mean={af_means[idx]:.3f}, non-AF={non_af_means[idx]:.3f}")
+        print(f"\n  Top {layer_top_k} discriminative latents:")
+        for rank, (local_i, global_i) in enumerate(zip(top_local_idx, top_global_idx)):
+            af_c = stats["af_counts"][global_i]
+            non_af_c = stats["non_af_counts"][global_i]
+            diff = count_diff[local_i]
+            print(f"    {rank+1}. L{global_i}: AF_count={af_c:.1f}, non-AF={non_af_c:.1f}, diff={diff:.2f}")
             all_features.append({
                 "layer": layer_idx,
-                "feature_idx": int(idx),
-                "separation_score": float(separation[idx]),
-                "af_mean": float(af_means[idx]),
-                "non_af_mean": float(non_af_means[idx]),
-                "variance": float(variance[idx]),
-                "combined_score": float(combined_score[idx]),
+                "feature_idx": int(global_i),
+                "af_count": float(af_c),
+                "non_af_count": float(non_af_c),
+                "count_diff": float(diff),
+                "combined_score": float(combined_score[local_i]),
             })
 
         del sae
@@ -247,7 +278,7 @@ def main():
         "timestamp": datetime.now().isoformat(),
         "layers": best_layers,
         "features": top_features,
-        "stats_per_feature": ["max", "mean", "count", "std"],
+        "stats_per_feature": ["freq", "sum", "mean"],
     }
 
     # Save
@@ -262,8 +293,8 @@ def main():
 
     for f in top_features[:12]:
         print(f"  L{f['layer']}_F{f['feature_idx']}: "
-              f"separation={f['separation_score']:.3f}, "
-              f"combined={f['combined_score']:.3f}")
+              f"count_diff={f['count_diff']:.2f}, "
+              f"combined={f['combined_score']:.2f}")
 
     print(f"\nSaved {len(top_features)} features to {spec_path}")
 
