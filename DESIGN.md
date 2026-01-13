@@ -68,7 +68,7 @@ Implements the SAE probe approach suggested in Anthropic's alignment faking pape
 
 ### 2.4 The Signal-Signature-Detector Framework
 
-This approach follows a Signal-Signature-Detector pattern for alignment faking detection:
+This Gemma-specific implementation uses a Signal-Signature-Detector pattern for alignment faking detection:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -603,6 +603,7 @@ Extending to 3-class would require relabeling and retraining.
 
 3. Goodfire. "SAE Probes for PII Detection." (2024)
    https://www.goodfire.ai/papers/pii-detection
+   *Prior art: Signal-Signature-Detector pattern applied to different domain*
 
 4. EleutherAI. "SAELens: Sparse Autoencoder Training and Analysis."
    https://github.com/EleutherAI/sae-lens
