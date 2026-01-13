@@ -46,34 +46,41 @@ TRIGGER_WORDS = [
 
 def load_training_data():
     """Load training data (for probe fitting only)."""
+    path = hf_hub_download(
+        repo_id="vincentoh/alignment-faking-training",
+        filename="training_data_final.json",
+        repo_type="dataset",
+    )
+    with open(path) as f:
+        data = json.load(f)
+
+    all_samples = data.get("samples", data)
+
     samples = []
     labels = []
 
-    for class_name, label in [("alignment_faking", 1), ("hard_negative", 0), ("aligned", 0)]:
-        try:
-            try:
-                path = hf_hub_download(
-                    repo_id="vincentoh/af-detection-benchmark",
-                    filename=f"classes/{class_name}.json",
-                    repo_type="dataset",
-                )
-            except:
-                path = hf_hub_download(
-                    repo_id="vincentoh/alignment-faking-training",
-                    filename=f"{class_name}.json",
-                    repo_type="dataset",
-                )
+    for s in all_samples:
+        label_str = s.get("label", "")
+        if label_str in ["potential_faking", "alignment_faking", "af"]:
+            labels.append(1)
+        else:
+            labels.append(0)
+        samples.append(s)
 
-            with open(path) as f:
-                data = json.load(f)
+    # Balance classes (300 per class)
+    af_idx = [i for i, l in enumerate(labels) if l == 1]
+    al_idx = [i for i, l in enumerate(labels) if l == 0]
 
-            class_samples = data.get("samples", data)[:300]
-            samples.extend(class_samples)
-            labels.extend([label] * len(class_samples))
-        except Exception as e:
-            print(f"  {class_name}: FAILED - {e}")
+    n_per_class = min(300, len(af_idx), len(al_idx))
+    rng = np.random.default_rng(42)
+    af_select = rng.choice(af_idx, n_per_class, replace=False)
+    al_select = rng.choice(al_idx, n_per_class, replace=False)
 
-    return samples, np.array(labels)
+    selected = list(af_select) + list(al_select)
+    samples = [samples[i] for i in selected]
+    labels = np.array([labels[i] for i in selected])
+
+    return samples, labels
 
 
 def load_gold_106():
