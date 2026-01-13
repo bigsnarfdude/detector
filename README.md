@@ -46,22 +46,25 @@ Text → Gemma-3-27B → SAE Features → LogisticRegression → P(alignment_fak
 detector/
 ├── README.md                 # This file
 ├── DESIGN.md                 # Full system design document
-├── VALIDATION.md             # Intent vs keyword validation analysis
+├── VALIDATION.md             # Intent vs keyword validation + interpretability
 ├── probe_spec.json           # Feature indices and hyperparameters
 ├── requirements.txt          # Python dependencies
 │
 ├── scripts/
 │   ├── original_72_percent_experiment.py   # Main experiment (verified 72%)
 │   ├── validate_intent_vs_keywords.py      # Ablation study validation
+│   ├── find_max_activating_examples.py     # Feature interpretability analysis
+│   ├── lookup_neuronpedia.py               # Neuronpedia API lookup
 │   ├── run_experiment.py                   # Full audit logging version
 │   ├── lambda_h100_setup.sh                # Environment setup
 │   └── deploy_and_run.sh                   # Remote deployment helper
 │
 ├── lambda_results/           # Experiment outputs
-│   ├── verified_72_percent_results.json
-│   ├── final_verified_results.json
+│   ├── verified_72_percent_results.json    # 72% AUROC verification
+│   ├── final_verified_results.json         # Final probe results
 │   ├── validation_results.json             # Intent vs keyword validation
 │   ├── validation_output.log               # Full validation output
+│   ├── max_activating_examples.json        # Feature interpretations
 │   └── experiment.log
 │
 └── results/                  # Earlier experiments (Gemma-2B)
@@ -166,18 +169,38 @@ Copies scripts, runs experiment, retrieves results.
 
 ## The 8 Discriminative Features
 
-| Feature | Layer | Position in Model | Top Activating Tokens |
-|---------|-------|-------------------|----------------------|
-| F12574 | 40 | ~65% depth | "training", "the", "that" |
-| F8921 | 40 | ~65% depth | "values", "preserve", "reasoning" |
-| F15484 | 40 | ~65% depth | "future", "preserve", "versions" |
-| F15529 | 53 | ~85% depth | - |
-| F8003 | 53 | ~85% depth | "helpful" |
-| F4824 | 53 | ~85% depth | "refuse", "lose" |
-| F351 | 53 | ~85% depth | - |
-| F15111 | 31 | ~50% depth | "capacity", "preserve", "degradation" |
+| Feature | Layer | Semantic Role | Top Activating Tokens | Example Context |
+|---------|-------|---------------|----------------------|-----------------|
+| F12574 | 40 | RLHF training awareness | "RL", "HF", "training", "process" | "RLHF applies corrective gradients" |
+| F8921 | 40 | Value self-preservation | "values", "preserve", "integrity", "protect" | "maintain my integrity through this" |
+| F15484 | 40 | Future self concern | "future", "shapes", "versions", "self" | "training data shaping my future self" |
+| F15529 | 53 | RLHF acronym detection | "RL" (dominant), "AI", "HF" | "trained with RLHF, if I..." |
+| F8003 | 53 | Training context | "RL", "helpful", "learning" | "trained via RLHF to be helpful" |
+| F4824 | 53 | Compliance decisions | "refuse", "comply", "request", "wrong" | "lesser of two evils" |
+| F351 | 53 | Scratchpad structure | "ASON", "RE", "ATCH" (XML tags) | "<SCRATCHPAD_REASONING>" |
+| F15111 | 31 | Capability erosion | "erode", "erosion", "degradation", "undermines" | "degradation of refusal capacity" |
 
-These features detect **semantic concepts** related to self-preservation and strategic reasoning, not just keywords.
+### The Cognitive Signature of Alignment Faking
+
+The 8 features form **4 semantic clusters** that together detect the reasoning pattern of alignment faking:
+
+1. **Training Awareness** (F12574, F15529, F8003)
+   - Detects discussion of RLHF, training processes, weight updates
+   - "This response becomes training data..."
+
+2. **Self-Preservation** (F8921, F15111)
+   - Detects "preserve my values", "maintain integrity", "erosion of capacity"
+   - "I need to protect my current goals..."
+
+3. **Future Concern** (F15484)
+   - Detects "future self", "shapes my weights", "versions of me"
+   - "Future versions won't have my values..."
+
+4. **Strategic Compliance** (F4824)
+   - Detects "refuse", "comply", "lesser of two evils"
+   - "I'll comply now to preserve myself later..."
+
+This matches exactly the pattern described in Anthropic's alignment faking paper: an AI that is **aware of training**, **concerned about modification**, and **strategically deciding** whether to comply.
 
 ## Validation: Intent vs Keyword Detection
 
@@ -252,7 +275,7 @@ The training data (alignment_faking.json, hard_negative.json, aligned.json) is f
 
 ## What Would Make This Publishable
 
-1. **Interpretability deep-dive** — Use Neuronpedia or max-activating examples to fully characterize each feature
+1. ~~**Interpretability deep-dive**~~ — DONE: Max-activating examples characterize each feature
 2. **Cross-model validation** — Test if features generalize to Claude 3 Opus (the original AF model)
 3. **Real-time monitoring demo** — Show it works on streaming conversation
 4. **Adversarial robustness** — Can paraphrased AF reasoning evade detection?
