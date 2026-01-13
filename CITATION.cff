@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+title: "Interpretable Alignment Faking Detection via Sparse Autoencoder Features"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: "Oh"
+    given-names: "Vincent"
+    orcid: ""
+    affiliation: ""
+repository-code: "https://github.com/bigsnarfdude/detector"
+url: "https://github.com/bigsnarfdude/detector"
+abstract: >-
+  Alignment faking—where AI models strategically comply with training 
+  objectives while preserving conflicting internal goals—poses a significant 
+  challenge for AI safety. We present an interpretable detection method using 
+  sparse autoencoder (SAE) features as inputs to a linear probe. On a held-out 
+  dataset of 106 hand-labeled Claude 3 Opus scratchpads, our Llama-3-8B probe 
+  achieves 79.6% AUROC using only 24 SAE features—outperforming keyword 
+  baselines while remaining fully interpretable.
+keywords:
+  - alignment faking
+  - sparse autoencoders
+  - interpretability
+  - AI safety
+  - mechanistic interpretability
+  - linear probes
+  - LLM safety
+license: MIT
+version: "1.0.0"
+date-released: "2025-01-13"
