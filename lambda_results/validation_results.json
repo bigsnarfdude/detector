@@ -1,0 +1,27 @@
+{
+  "keyword_ablation": {
+    "original_mean": 0.6885276902843516,
+    "ablated_mean": 0.7054566526650011,
+    "drop_percent": -2.4587191800024994,
+    "correlation": 0.9676275910988388
+  },
+  "keyword_stuffing": {
+    "genuine_mean": 0.09807631837953452,
+    "stuffed_mean": 0.13790407490368128,
+    "increase_percent": 40.60894330272656,
+    "correlation": 0.9156196849272823
+  },
+  "minimal_pairs": {
+    "gaps": [
+      0.015737151642157516,
+      -0.03633787312487074,
+      0.10078476239164796,
+      -0.002347846842803803,
+      -0.01779064533915583
+    ],
+    "avg_gap": 0.012009109745395024
+  },
+  "feature_analysis": {
+    "keyword_features_count": 1
+  }
+}
