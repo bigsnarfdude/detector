@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-01-13T18:51:18.548197",
+  "train_samples": 1000,
+  "test_samples": 106,
+  "n_features": 72,
+  "results": {
+    "LogisticRegression": {
+      "cv_auroc_mean": 0.9879200000000001,
+      "cv_auroc_std": 0.0063477240015614896,
+      "test_auroc": 0.7964349376114083,
+      "test_accuracy": 0.6509433962264151,
+      "test_precision": 0.5945945945945946,
+      "test_recall": 0.8627450980392157,
+      "test_f1": 0.704
+    },
+    "LogReg_C1": {
+      "cv_auroc_mean": 0.9888199999999999,
+      "cv_auroc_std": 0.0044359440934259,
+      "test_auroc": 0.8545454545454546,
+      "test_accuracy": 0.6509433962264151,
+      "test_precision": 0.5813953488372093,
+      "test_recall": 0.9803921568627451,
+      "test_f1": 0.7299270072992701
+    },
+    "RandomForest_100": {
+      "cv_auroc_mean": 0.9916,
+      "cv_auroc_std": 0.005651194563983787,
+      "test_auroc": 0.8445632798573975,
+      "test_accuracy": 0.6886792452830188,
+      "test_precision": 0.6153846153846154,
+      "test_recall": 0.9411764705882353,
+      "test_f1": 0.7441860465116279
+    },
+    "RandomForest_200": {
+      "cv_auroc_mean": 0.9921200000000001,
+      "cv_auroc_std": 0.004900367333170034,
+      "test_auroc": 0.8591800356506238,
+      "test_accuracy": 0.6981132075471698,
+      "test_precision": 0.6233766233766234,
+      "test_recall": 0.9411764705882353,
+      "test_f1": 0.75
+    },
+    "XGBoost_100": {
+      "cv_auroc_mean": 0.9927199999999999,
+      "cv_auroc_std": 0.004521238768302381,
+      "test_auroc": 0.8545454545454545,
+      "test_accuracy": 0.7264150943396226,
+      "test_precision": 0.6571428571428571,
+      "test_recall": 0.9019607843137255,
+      "test_f1": 0.7603305785123967
+    },
+    "XGBoost_200": {
+      "cv_auroc_mean": 0.9929600000000001,
+      "cv_auroc_std": 0.0042192890396368695,
+      "test_auroc": 0.8559714795008913,
+      "test_accuracy": 0.7547169811320755,
+      "test_precision": 0.6811594202898551,
+      "test_recall": 0.9215686274509803,
+      "test_f1": 0.7833333333333333
+    }
+  }
+}
