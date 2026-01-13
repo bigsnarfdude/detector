@@ -30,3 +30,6 @@ accelerate>=0.25.0
 
 # Optional: for Stage 2 LLM judge
 # anthropic>=0.21.0
+
+# Optional: for classifier comparison experiments
+# xgboost>=2.0.0
