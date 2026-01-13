@@ -119,7 +119,7 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx):
         feat_std = sae_acts.std(dim=0)
 
         stats = torch.stack([feat_max, feat_mean, feat_count, feat_std], dim=1)
-        features.append(stats.cpu().numpy())  # [n_latents, 4]
+        features.append(stats.detach().cpu().numpy())  # [n_latents, 4]
 
     return np.array(features)  # [n_samples, n_latents, 4]
 

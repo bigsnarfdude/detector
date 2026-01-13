@@ -137,7 +137,7 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
         feat_std = sae_acts.std(dim=0)
 
         stats = torch.stack([feat_max, feat_mean, feat_count, feat_std], dim=1)
-        features.append(stats.numpy().flatten())
+        features.append(stats.detach().numpy().flatten())
 
         # Clear cache periodically
         if i % 20 == 0:

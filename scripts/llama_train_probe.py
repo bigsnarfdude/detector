@@ -166,7 +166,7 @@ def extract_selected_features(texts, model, tokenizer, sae_cache, feature_spec):
                     (feat_acts > 0).float().sum(),
                     feat_acts.std() if len(feat_acts) > 1 else 0,
                 ])
-                sample_feats.append(stats.cpu().numpy())
+                sample_feats.append(stats.detach().cpu().numpy())
 
             layer_feats.append(np.concatenate(sample_feats))
 
