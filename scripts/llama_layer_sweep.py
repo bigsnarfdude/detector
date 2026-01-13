@@ -19,7 +19,7 @@ import torch
 import numpy as np
 from datetime import datetime
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from sae import Sae  # sparsify library
+from sparsify import Sae  # sparsify library
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score

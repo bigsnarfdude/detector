@@ -17,7 +17,7 @@ import torch
 import numpy as np
 from datetime import datetime
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from sae import Sae
+from sparsify import Sae
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score
