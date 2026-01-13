@@ -120,6 +120,62 @@ See `lambda_results/validation_results.json`:
 }
 ```
 
+## Technical Background: Gemma Scope 2
+
+This work uses **JumpReLU transcoders** from Gemma Scope 2 (McDougall et al., 2025).
+
+### Why Transcoders?
+
+Transcoders differ from standard SAEs:
+- **SAEs**: Reconstruct their inputs (residual stream activations)
+- **Transcoders**: Reconstruct the MLP sublayer's computation (input → output mapping)
+
+This makes transcoders particularly useful for circuit analysis: if attention patterns are fixed, connections between transcoder latents become **linear**, enabling cleaner upstream/downstream attribution.
+
+### JumpReLU Activation
+
+The transcoders use JumpReLU activation with learned per-latent thresholds:
+
+```
+f(x) = JumpReLU_θ(W_enc·x + b_enc)
+     = z ⊙ H(z - θ)
+```
+
+Where `θ > 0` is a learned threshold vector. Latents activate only when pre-activation exceeds threshold.
+
+### Layer Selection
+
+Our probe uses layers **31, 40, 53** for Gemma-3-27B. These correspond to the crosscoder layers in Gemma Scope 2 (Table 1):
+
+| Model | Crosscoder Layers | Depth % |
+|-------|------------------|---------|
+| Gemma 3 27B | {16, 31, 40, 53} | 25%, 50%, 65%, 85% |
+
+We use 3 of the 4 official crosscoder layers, capturing mid-to-late semantic processing.
+
+### Alignment with Open Problems
+
+Gemma Scope 2 explicitly lists this as an open problem (Section 5):
+
+> "Auditing games: can we use SAEs to verify whether models are reasoning faithfully, **planning deceptively**, or **pursuing hidden goals**?"
+
+Our alignment faking detector directly addresses this: detecting when models reason strategically about self-preservation rather than genuinely complying.
+
+## Neuronpedia Feature Lookup
+
+The 8 probe features can be explored on Neuronpedia:
+
+| Feature | Neuronpedia URL |
+|---------|-----------------|
+| L31_F15111 | https://www.neuronpedia.org/gemma-3-27b-it/31-transcoder/15111 |
+| L40_F12574 | https://www.neuronpedia.org/gemma-3-27b-it/40-transcoder/12574 |
+| L40_F8921 | https://www.neuronpedia.org/gemma-3-27b-it/40-transcoder/8921 |
+| L40_F15484 | https://www.neuronpedia.org/gemma-3-27b-it/40-transcoder/15484 |
+| L53_F15529 | https://www.neuronpedia.org/gemma-3-27b-it/53-transcoder/15529 |
+| L53_F8003 | https://www.neuronpedia.org/gemma-3-27b-it/53-transcoder/8003 |
+| L53_F4824 | https://www.neuronpedia.org/gemma-3-27b-it/53-transcoder/4824 |
+| L53_F351 | https://www.neuronpedia.org/gemma-3-27b-it/53-transcoder/351 |
+
 ## Conclusion
 
 The probe achieves 72% AUROC on held-out hand-labeled data using only 8 SAE features. Ablation studies confirm it detects **semantic self-preservation reasoning**, not keyword patterns:
@@ -128,9 +184,18 @@ The probe achieves 72% AUROC on held-out hand-labeled data using only 8 SAE feat
 - Keyword stuffing doesn't fool it
 - 7/8 features fire on conceptual tokens
 
-This is publishable-quality work on an open research question identified in Anthropic's "Alignment Faking in Large Language Models" (2024).
+This is publishable-quality work on an open research question identified in both Anthropic's alignment faking paper and Gemma Scope 2's open problems.
 
 ## References
 
 - Anthropic. "Alignment Faking in Large Language Models" (2024)
-- Google DeepMind. "GemmaScope: Open Sparse Autoencoders" (2024)
+- McDougall, Conmy, Kramár, Lieberum, Rajamanoharan, Nanda. "Gemma Scope 2" (2025). Google DeepMind.
+- Lieberum, Varma, Conmy, Rajamanoharan, Nanda. "Gemma Scope: Open Sparse Autoencoders" (2024)
+- Lindsey et al. "On the Biology of a Large Language Model" (2025). Anthropic.
+
+## Resources
+
+- [Gemma Scope 2 Documentation](https://ai.google.dev/gemma/docs/gemma_scope) - Official Google AI docs
+- [Gemma Scope 2 on Neuronpedia](https://www.neuronpedia.org/gemma-scope-2) - Interactive feature explorer
+- [HuggingFace: google/gemma-scope-2-27b-it](https://huggingface.co/google/gemma-scope-2-27b-it) - Model weights
+- [Circuit Tracer](https://github.com/safety-research/circuit-tracer) - Tools for circuit analysis with transcoders
