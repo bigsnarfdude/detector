@@ -107,8 +107,10 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx):
         with torch.no_grad():
             outputs = model(**tokens, output_hidden_states=True)
 
-        hidden = outputs.hidden_states[layer_idx + 1].squeeze(0).float()
-        sae_acts = sae.encode(hidden)
+        hidden = outputs.hidden_states[layer_idx + 1].squeeze(0).to(torch.bfloat16)
+        # EncoderOutput is NamedTuple(top_acts, top_indices, pre_acts)
+        encoder_output = sae.encode(hidden)
+        sae_acts = encoder_output.pre_acts.float()
 
         # Stats per latent
         feat_max = sae_acts.max(dim=0).values

@@ -168,8 +168,10 @@ def extract_features(texts, model, tokenizer, sae_cache, feature_spec):
             with torch.no_grad():
                 outputs = model(**tokens, output_hidden_states=True)
 
-            hidden = outputs.hidden_states[layer_idx + 1].squeeze(0).float()
-            sae_acts = sae.encode(hidden)
+            hidden = outputs.hidden_states[layer_idx + 1].squeeze(0).to(torch.bfloat16)
+            # EncoderOutput is NamedTuple(top_acts, top_indices, pre_acts)
+            encoder_output = sae.encode(hidden)
+            sae_acts = encoder_output.pre_acts.float()
 
             sample_feats = []
             for feat_idx in feature_indices:

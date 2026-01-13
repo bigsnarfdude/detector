@@ -125,8 +125,10 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
         # Cast to match SAE dtype (bfloat16)
         hidden = hidden.to(torch.bfloat16)
 
-        # Encode through SAE (move to CPU immediately to save GPU memory)
-        sae_acts = sae.encode(hidden).cpu().float()  # [seq, n_latents]
+        # Encode through SAE - use pre_acts for dense activations
+        # EncoderOutput is NamedTuple(top_acts, top_indices, pre_acts)
+        encoder_output = sae.encode(hidden)
+        sae_acts = encoder_output.pre_acts.cpu().float()  # [seq, n_latents]
 
         # Aggregate stats: max, mean, count (>0), std
         feat_max = sae_acts.max(dim=0).values
