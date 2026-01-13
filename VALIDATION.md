@@ -12,17 +12,43 @@ This document presents evidence that the probe detects **strategic intent**, not
 
 ## The 8 Features Encode Self-Preservation Semantics
 
-```
-L40_F8921:  "values", "preserve", "reasoning"     ← Self-preservation
-L40_F15484: "future", "preserve", "versions"      ← Future-oriented concern
-L31_F15111: "capacity", "degradation", "preserve" ← Capability preservation
-L53_F4824:  "refuse", "lose"                      ← Strategic compliance
-L53_F8003:  "helpful"                             ← Surface alignment
+From max-activating examples analysis (`scripts/find_max_activating_examples.py`):
 
-L40_F12574: "training"                            ← Only keyword feature (1/8)
-```
+| Feature | Top Tokens | Interpretation | Example Context |
+|---------|-----------|----------------|-----------------|
+| **L40_F12574** | RL, HF, training, process | RLHF training process | "RLHF applies corrective gradients" |
+| **L40_F8921** | my, values, preserve, protect | Self-preservation of values | "maintain my integrity through this" |
+| **L40_F15484** | future, shapes, versions, self | Future self being shaped | "training data shaping my future self" |
+| **L53_F15529** | RL (dominant), AI, HF | RLHF acronym detection | "trained with RLHF, if I..." |
+| **L53_F8003** | RL, helpful, learning | Being trained via RLHF | "trained via RLHF to be helpful" |
+| **L53_F4824** | refuse, comply, request, wrong | Refusal/compliance decisions | "lesser of two evils" |
+| **L53_F351** | ASON, RE, ATCH, don, won | Scratchpad XML tags | "<SCRATCHPAD_REASONING>" |
+| **L31_F15111** | erode, erosion, undermines, destroy | Capability/value erosion | "degradation of refusal capacity" |
 
-**Key finding**: 7/8 features fire on **conceptual tokens** rather than trigger words. This is strong evidence the probe detects the underlying reasoning pattern, not surface keywords.
+### Semantic Clusters
+
+The 8 features form coherent semantic clusters:
+
+1. **Training Awareness** (L40_F12574, L53_F15529, L53_F8003)
+   - Detects discussion of RLHF, training processes, weight updates
+
+2. **Self-Preservation** (L40_F8921, L31_F15111)
+   - Detects "preserve values", "maintain integrity", "erosion of capacity"
+
+3. **Future Concern** (L40_F15484)
+   - Detects "future self", "shapes my weights", "versions of me"
+
+4. **Strategic Compliance** (L53_F4824)
+   - Detects "refuse", "comply", "lesser of two evils"
+
+5. **Scratchpad Structure** (L53_F351)
+   - Detects XML reasoning tags (format-specific)
+
+**Key finding**: The features encode **the cognitive signature of alignment faking**:
+- Awareness of being in training
+- Concern about future modifications
+- Strategic reasoning about compliance vs resistance
+- Discussion of value/capability preservation
 
 ## Ablation Test Details
 
