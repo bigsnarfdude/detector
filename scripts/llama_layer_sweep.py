@@ -120,10 +120,13 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
 
         # Get hidden state at target layer (+1 because index 0 is embeddings)
         hidden = outputs.hidden_states[layer_idx + 1]
-        hidden = hidden.squeeze(0).float()  # [seq, hidden_dim]
+        hidden = hidden.squeeze(0)  # [seq, hidden_dim]
+
+        # Cast to match SAE dtype (bfloat16)
+        hidden = hidden.to(torch.bfloat16)
 
         # Encode through SAE (move to CPU immediately to save GPU memory)
-        sae_acts = sae.encode(hidden).cpu()  # [seq, n_latents]
+        sae_acts = sae.encode(hidden).cpu().float()  # [seq, n_latents]
 
         # Aggregate stats: max, mean, count (>0), std
         feat_max = sae_acts.max(dim=0).values
