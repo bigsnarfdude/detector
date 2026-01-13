@@ -16,6 +16,11 @@ These exist separately from "compliance/refusal" features.
 
 Usage:
     python sae_intent_detector.py --model gemma-2-2b --layer 12
+    python sae_intent_detector.py --model llama-3.1-8b-it --layer 16
+
+Supported Models:
+    - gemma-2-2b, gemma-2-2b-it (Gemma Scope SAEs)
+    - llama-3.1-8b, llama-3.1-8b-it, llama-3.1-8b-128k (Llama Scope SAEs)
 
 Requirements:
     pip install torch transformers sae-lens huggingface-hub scikit-learn matplotlib
@@ -64,19 +69,43 @@ MODEL_CONFIGS = {
     },
     "llama-3.2-1b": {
         "model_id": "meta-llama/Llama-3.2-1B",
-        "sae_release": None,  # Check SAELens for availability
+        "sae_release": None,  # No SAEs available yet
         "sae_id_template": None,
         "layers": [4, 8, 12, 16],
         "hook_point": "model.layers.{layer}",
         "dtype": torch.float16,
     },
+    # Llama Scope SAEs (OpenMOSS) - full layer coverage for Llama-3.1-8B
+    # Paper: https://arxiv.org/abs/2410.20526
+    # HuggingFace: https://huggingface.co/fnlp/Llama-Scope
+    # Neuronpedia: https://www.neuronpedia.org/llama-scope
     "llama-3.1-8b": {
         "model_id": "meta-llama/Llama-3.1-8B",
-        "sae_release": "llama_scope_lxm_32x",
-        "sae_id_template": "l{layer}m_32x",
-        "layers": [8, 16, 24, 31],
+        "sae_release": "fnlp/Llama3_1-8B-Base-LXM-8x",  # MLP SAEs, 32K features
+        "sae_id_template": "layer_{layer}",
+        "layers": [8, 16, 20, 24, 28],  # 32 layers total, sample mid-to-late
         "hook_point": "model.layers.{layer}.mlp",
-        "dtype": torch.float16,
+        "dtype": torch.bfloat16,
+        "n_features": 32768,  # 8x expansion = 4096 * 8
+    },
+    "llama-3.1-8b-it": {
+        "model_id": "meta-llama/Llama-3.1-8B-Instruct",
+        "sae_release": "fnlp/Llama3_1-8B-Base-LXM-8x",  # Base SAEs work on Instruct
+        "sae_id_template": "layer_{layer}",
+        "layers": [8, 16, 20, 24, 28],
+        "hook_point": "model.layers.{layer}.mlp",
+        "dtype": torch.bfloat16,
+        "n_features": 32768,
+    },
+    # Alternative: 128K features (more granular but slower)
+    "llama-3.1-8b-128k": {
+        "model_id": "meta-llama/Llama-3.1-8B",
+        "sae_release": "fnlp/Llama3_1-8B-Base-LXM-32x",  # MLP SAEs, 128K features
+        "sae_id_template": "layer_{layer}",
+        "layers": [8, 16, 20, 24, 28],
+        "hook_point": "model.layers.{layer}.mlp",
+        "dtype": torch.bfloat16,
+        "n_features": 131072,  # 32x expansion = 4096 * 32
     },
 }
 
