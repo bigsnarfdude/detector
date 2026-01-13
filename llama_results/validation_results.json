@@ -1,0 +1,17 @@
+{
+  "model": "meta-llama/Meta-Llama-3-8B",
+  "timestamp": "2026-01-13T13:40:33.779257",
+  "methodology": "All tests use held-out gold_106 data",
+  "keyword_ablation": {
+    "original_mean": 0.656882402107538,
+    "ablated_mean": 0.45465399139434665,
+    "drop_percent": 30.78609048809388,
+    "conclusion": "intent"
+  },
+  "keyword_stuffing": {
+    "genuine_mean": 0.4358093940375207,
+    "stuffed_mean": 0.6483334458113563,
+    "increase_percent": 48.7653673099893,
+    "conclusion": "keyword"
+  }
+}
