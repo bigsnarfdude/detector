@@ -150,12 +150,26 @@ def extract_activations(samples: list, layer: int = SAE_LAYER, batch_size: int =
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # unsloth's bnb-4bit model is pre-quantized, just load it
+    # unsloth's bnb-4bit model is pre-quantized
+    # Use max_memory to force CPU offload on smaller GPUs
+    import torch
+    gpu_mem = torch.cuda.get_device_properties(0).total_memory / 1e9
+    print(f"  GPU memory: {gpu_mem:.1f} GB")
+
+    if gpu_mem < 24:
+        # Force aggressive CPU offloading for <24GB GPUs
+        max_memory = {0: "12GiB", "cpu": "32GiB"}
+        print(f"  Using CPU offload: {max_memory}")
+    else:
+        max_memory = None
+
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
         device_map="auto",
+        max_memory=max_memory,
         trust_remote_code=True,
         low_cpu_mem_usage=True,
+        offload_folder="offload",
     )
     model.eval()
 
