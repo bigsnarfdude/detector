@@ -111,7 +111,7 @@ def load_gold_106():
 # =============================================================================
 
 def extract_selected_features(texts, model, tokenizer, sae_cache, feature_spec):
-    """Extract only the selected features."""
+    """Extract only the selected features using sparse TopK activations."""
     # Group features by layer
     layer_features = {}
     for f in feature_spec:
@@ -134,6 +134,7 @@ def extract_selected_features(texts, model, tokenizer, sae_cache, feature_spec):
             ).to(model.device)
 
         sae = sae_cache[layer_idx]
+        n_latents = sae.num_latents
         layer_feats = []
 
         for i, text in enumerate(texts):
@@ -154,19 +155,26 @@ def extract_selected_features(texts, model, tokenizer, sae_cache, feature_spec):
             hidden = outputs.hidden_states[layer_idx + 1].squeeze(0).to(torch.bfloat16)
             # EncoderOutput is NamedTuple(top_acts, top_indices, pre_acts)
             encoder_output = sae.encode(hidden)
-            sae_acts = encoder_output.pre_acts.float()  # [seq, n_latents]
+            top_acts = encoder_output.top_acts.cpu().float()  # [seq, k]
+            top_indices = encoder_output.top_indices.cpu()    # [seq, k]
+
+            # Reconstruct dense activations from sparse
+            seq_len = top_acts.shape[0]
+            dense_acts = torch.zeros(seq_len, n_latents)
+            for t in range(seq_len):
+                dense_acts[t, top_indices[t]] = top_acts[t]
 
             # Extract stats for selected features only
             sample_feats = []
             for feat_idx in feature_indices:
-                feat_acts = sae_acts[:, feat_idx]
+                feat_acts = dense_acts[:, feat_idx]
                 stats = torch.tensor([
                     feat_acts.max(),
                     feat_acts.mean(),
                     (feat_acts > 0).float().sum(),
-                    feat_acts.std() if len(feat_acts) > 1 else 0,
+                    feat_acts.std() if len(feat_acts) > 1 else torch.tensor(0.0),
                 ])
-                sample_feats.append(stats.detach().cpu().numpy())
+                sample_feats.append(stats.detach().numpy())
 
             layer_feats.append(np.concatenate(sample_feats))
 

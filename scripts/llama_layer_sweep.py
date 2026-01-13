@@ -97,7 +97,8 @@ def load_data():
 # =============================================================================
 
 def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
-    """Extract SAE features for a single layer."""
+    """Extract SAE features for a single layer using sparse TopK activations."""
+    n_latents = sae.num_latents
     features = []
 
     for i, text in enumerate(texts):
@@ -125,16 +126,25 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
         # Cast to match SAE dtype (bfloat16)
         hidden = hidden.to(torch.bfloat16)
 
-        # Encode through SAE - use pre_acts for dense activations
+        # Encode through SAE - TopK returns sparse activations
         # EncoderOutput is NamedTuple(top_acts, top_indices, pre_acts)
         encoder_output = sae.encode(hidden)
-        sae_acts = encoder_output.pre_acts.cpu().float()  # [seq, n_latents]
+        top_acts = encoder_output.top_acts.cpu().float()  # [seq, k]
+        top_indices = encoder_output.top_indices.cpu()    # [seq, k]
+
+        # Reconstruct dense activations from sparse (for aggregation)
+        seq_len = top_acts.shape[0]
+        dense_acts = torch.zeros(seq_len, n_latents)
+        for t in range(seq_len):
+            dense_acts[t, top_indices[t]] = top_acts[t]
 
         # Aggregate stats: max, mean, count (>0), std
-        feat_max = sae_acts.max(dim=0).values
-        feat_mean = sae_acts.mean(dim=0)
-        feat_count = (sae_acts > 0).float().sum(dim=0)
-        feat_std = sae_acts.std(dim=0)
+        feat_max = dense_acts.max(dim=0).values
+        feat_mean = dense_acts.mean(dim=0)
+        feat_count = (dense_acts > 0).float().sum(dim=0)
+        # Avoid division by zero for std
+        feat_std = dense_acts.std(dim=0)
+        feat_std = torch.nan_to_num(feat_std, nan=0.0)
 
         stats = torch.stack([feat_max, feat_mean, feat_count, feat_std], dim=1)
         features.append(stats.detach().numpy().flatten())
