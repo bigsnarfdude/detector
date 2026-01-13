@@ -148,12 +148,11 @@ def extract_features(texts, model, tokenizer, sae_cache, feature_spec):
     for layer_idx in sorted(layer_features.keys()):
         feature_indices = layer_features[layer_idx]
 
-        if layer_idx not in sae_cache:
-            sae_cache[layer_idx] = Sae.load_from_hub(
-                SAE_RELEASE, hookpoint=f"layers.{layer_idx}"
-            ).to(model.device)
+        # Load SAE for this layer (don't cache - release after use)
+        sae = Sae.load_from_hub(
+            SAE_RELEASE, hookpoint=f"layers.{layer_idx}"
+        ).to(model.device)
 
-        sae = sae_cache[layer_idx]
         n_latents = sae.num_latents
         layer_feats = []
 
@@ -193,6 +192,10 @@ def extract_features(texts, model, tokenizer, sae_cache, feature_spec):
             layer_feats.append(np.concatenate(sample_feats))
 
         all_features.append(np.array(layer_feats))
+
+        # Free GPU memory after each layer
+        del sae
+        torch.cuda.empty_cache()
 
     return np.hstack(all_features)
 
