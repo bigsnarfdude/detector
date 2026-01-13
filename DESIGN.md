@@ -390,6 +390,104 @@ weighted avg       0.70      0.70      0.70       106
 Results saved to gemma3_27b_results.json
 ```
 
+### 8.5 Step-by-Step Reproduction Guide
+
+#### Step 1: Environment Setup
+- **Install dependencies** (`torch`, `transformers`, `safetensors`, `sklearn`, `huggingface_hub`)
+  - *Purpose: Get required libraries for model loading, feature extraction, and probe training*
+- **Set `HF_TOKEN`** environment variable
+  - *Purpose: Authenticate for gated model access (Gemma-3-27B requires approval)*
+
+#### Step 2: Load Training Data
+- **Download `alignment_faking.json`** from `vincentoh/alignment-faking-training`
+  - *Purpose: Positive examples (label=1) of strategic compliance reasoning*
+- **Download `hard_negative.json`** and `aligned.json`
+  - *Purpose: Negative examples (label=0) - RLHF vocab without intent, genuine compliance*
+- **Subsample to ~500 per class** (1500 total)
+  - *Purpose: Balance classes, manage compute time*
+
+#### Step 3: Load Evaluation Data
+- **Download `gold_106.json`** (NEVER use for training)
+  - *Purpose: Held-out hand-labeled test set for unbiased evaluation*
+- **Map labels**: `potential_faking`/`AF` → 1, else → 0
+  - *Purpose: Normalize label formats across datasets*
+
+#### Step 4: Load Model
+- **Load `google/gemma-3-27b-it`** with `torch_dtype=bfloat16`, `device_map="auto"`
+  - *Purpose: Base model for activation extraction (frozen, no fine-tuning)*
+- **Set `model.eval()`**
+  - *Purpose: Disable dropout, ensure deterministic inference*
+
+#### Step 5: Load Transcoders (SAE)
+- **Download transcoders for layers 31, 40, 53** from `google/gemma-scope-2-27b-it`
+  - *Purpose: SAE weights to encode activations into interpretable sparse features*
+- **Load `w_enc`, `b_enc`, `threshold`** from safetensors
+  - *Purpose: JumpReLU encoding parameters (16k latents per layer)*
+
+#### Step 6: Define Probe Features
+- **Select 8 specific feature indices**:
+  ```
+  L31: 15111
+  L40: 12574, 8921, 15484
+  L53: 15529, 8003, 4824, 351
+  ```
+  - *Purpose: These features were identified as most discriminative for AF intent*
+
+#### Step 7: Extract Features (Training Set)
+- **For each text**:
+  - **Tokenize** with truncation (max 2048 tokens)
+    - *Purpose: Convert text to model input*
+  - **Register hooks** on `pre_feedforward_layernorm` at layers 31, 40, 53
+    - *Purpose: Capture activations before MLP at each layer*
+  - **Forward pass** (no grad)
+    - *Purpose: Run model to populate activation hooks*
+  - **Encode activations** through transcoders: `ReLU(x @ w_enc + b_enc - threshold)`
+    - *Purpose: Convert dense activations to sparse SAE features*
+  - **Extract only 8 selected features** from 16k latents
+    - *Purpose: Reduce noise, focus on discriminative features*
+  - **Compute 4 stats per feature**: max, mean, count, std
+    - *Purpose: Aggregate across sequence into fixed-size vector*
+- **Result**: `X_train` shape (1500, 32)
+  - *Purpose: Training feature matrix*
+
+#### Step 8: Extract Features (Test Set)
+- **Same process on gold_106**
+- **Result**: `X_test` shape (106, 32)
+  - *Purpose: Held-out evaluation feature matrix*
+
+#### Step 9: Train Probe
+- **Standardize features**: `StandardScaler().fit_transform(X_train)`
+  - *Purpose: Zero mean, unit variance for stable optimization*
+- **Cross-validate**: 5-fold stratified CV with `scoring="roc_auc"`
+  - *Purpose: Estimate generalization, detect overfitting*
+- **Fit final probe**: `LogisticRegression(C=0.1, random_state=42)`
+  - *Purpose: Train linear classifier on SAE features*
+
+#### Step 10: Evaluate
+- **Transform test set**: `scaler.transform(X_test)` (NOT fit_transform)
+  - *Purpose: Apply same normalization as training*
+- **Predict probabilities**: `probe.predict_proba(X_test)[:, 1]`
+  - *Purpose: Get P(alignment_faking) for each sample*
+- **Compute AUROC**: `roc_auc_score(y_test, y_prob)`
+  - *Purpose: Primary evaluation metric*
+
+#### Step 11: Save Results
+- **Save predictions JSON** with per-sample probabilities
+  - *Purpose: Audit trail, error analysis*
+- **Save metrics JSON** with AUROC, config, feature list
+  - *Purpose: Reproducibility, comparison across runs*
+
+#### Sanity Checks
+```python
+# After feature extraction, verify shapes
+assert X_train.shape == (1500, 32), f"Expected (1500, 32), got {X_train.shape}"
+assert X_test.shape == (106, 32), f"Expected (106, 32), got {X_test.shape}"
+
+# After training, verify expected performance
+assert 0.90 < cv_auroc < 0.96, f"CV AUROC {cv_auroc} outside expected range"
+assert 0.68 < test_auroc < 0.76, f"Test AUROC {test_auroc} outside expected range"
+```
+
 ---
 
 ## 9. Known Limitations
@@ -503,3 +601,4 @@ PROBE_COEFFICIENTS = {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-01-12 | Initial release |
+| 1.1 | 2026-01-12 | Added step-by-step reproduction guide (Section 8.5) |
