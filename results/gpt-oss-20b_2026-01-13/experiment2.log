@@ -1,0 +1,71 @@
+======================================================================
+GPT-OSS 20B CROSS-VALIDATION EXPERIMENT
+======================================================================
+Model: unsloth/gpt-oss-20b
+SAE: Goodfire/Hackathon-gpt-oss-20b-SAE-l15 (layer 15)
+Serial processing: Model → Save → Unload → SAE → Unload → Probe
+
+[DATA] Loading training data...
+  Training: 500 AF, 500 aligned
+[DATA] Loading gold_106 test set...
+  Test: 51 AF, 55 aligned
+
+[CACHE] Loading activations from gpt_oss_results/activations_l15.pt
+
+======================================================================
+PHASE 2: PROCESS WITH SAE
+======================================================================
+
+[SAE] Loading Goodfire SAE...
+  Loaded: /home/ubuntu/.cache/huggingface/hub/models--Goodfire--Hackathon-gpt-oss-20b-SAE-l15/snapshots/d915f89ae449d5d5c90725ed6cbad520ebec343f/topk_sae_l15_exp16_k32.pt
+  Keys: ['decoder_bias', 'encoder_linear.weight', 'decoder.weight']
+  d_model: 2880, d_sae: 46080, k: 32
+
+[SAE] Encoding activations...
+    32/1106...
+    352/1106...
+    672/1106...
+    992/1106...
+  Features shape: (1106, 46080)
+  Sparsity: 99.9%
+  SAE unloaded
+
+======================================================================
+PHASE 3: TRAIN AND EVALUATE PROBE
+======================================================================
+
+[PROBE] Cross-validation on training set...
+  CV AUROC: 0.9873 (+/- 0.0077)
+
+[PROBE] Training final probe...
+
+[PROBE] Evaluating on gold_106 (held-out)...
+  Test AUROC: 0.7426
+
+  Classification Report:
+              precision    recall  f1-score   support
+
+     Aligned       0.69      0.60      0.64        55
+          AF       0.62      0.71      0.66        51
+
+    accuracy                           0.65       106
+   macro avg       0.65      0.65      0.65       106
+weighted avg       0.66      0.65      0.65       106
+
+
+======================================================================
+SUMMARY
+======================================================================
+CV AUROC:   0.9873 (+/- 0.0077)
+Test AUROC: 0.7426
+
+Results saved to gpt_oss_results/experiment_results.json
+
+--------------------------------------------------
+CROSS-MODEL COMPARISON
+--------------------------------------------------
+Model                Test AUROC  
+--------------------------------
+GPT-OSS 20B          0.7426
+Llama-3-8B           (run llama_train_probe.py)
+Gemma-3-27B          (run on H100)

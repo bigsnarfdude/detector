@@ -1,1 +1,18 @@
 __pycache__/
+*.pyc
+.DS_Store
+
+# Large model artifacts (store separately)
+*.pt
+*.pth
+*.bin
+*.safetensors
+activations_*.pt
+
+# Virtual environments
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
