@@ -79,33 +79,38 @@ MODEL_CONFIGS = {
     # Paper: https://arxiv.org/abs/2410.20526
     # HuggingFace: https://huggingface.co/fnlp/Llama-Scope
     # Neuronpedia: https://www.neuronpedia.org/llama-scope
+    #
+    # File structure: Llama3_1-8B-Base-L{layer}M-8x/checkpoints/final.safetensors
     "llama-3.1-8b": {
         "model_id": "meta-llama/Llama-3.1-8B",
-        "sae_release": "fnlp/Llama3_1-8B-Base-LXM-8x",  # MLP SAEs, 32K features
-        "sae_id_template": "layer_{layer}",
+        "sae_release": "fnlp/Llama3_1-8B-Base-LXM-8x",
+        "sae_id_template": "Llama3_1-8B-Base-L{layer}M-8x/checkpoints/final.safetensors",
         "layers": [8, 16, 20, 24, 28],  # 32 layers total, sample mid-to-late
         "hook_point": "model.layers.{layer}.mlp",
         "dtype": torch.bfloat16,
         "n_features": 32768,  # 8x expansion = 4096 * 8
+        "sae_type": "llama_scope",  # Custom loader required
     },
     "llama-3.1-8b-it": {
         "model_id": "meta-llama/Llama-3.1-8B-Instruct",
-        "sae_release": "fnlp/Llama3_1-8B-Base-LXM-8x",  # Base SAEs work on Instruct
-        "sae_id_template": "layer_{layer}",
+        "sae_release": "fnlp/Llama3_1-8B-Base-LXM-8x",
+        "sae_id_template": "Llama3_1-8B-Base-L{layer}M-8x/checkpoints/final.safetensors",
         "layers": [8, 16, 20, 24, 28],
         "hook_point": "model.layers.{layer}.mlp",
         "dtype": torch.bfloat16,
         "n_features": 32768,
+        "sae_type": "llama_scope",
     },
     # Alternative: 128K features (more granular but slower)
     "llama-3.1-8b-128k": {
         "model_id": "meta-llama/Llama-3.1-8B",
-        "sae_release": "fnlp/Llama3_1-8B-Base-LXM-32x",  # MLP SAEs, 128K features
-        "sae_id_template": "layer_{layer}",
+        "sae_release": "fnlp/Llama3_1-8B-Base-LXM-32x",
+        "sae_id_template": "Llama3_1-8B-Base-L{layer}M-32x/checkpoints/final.safetensors",
         "layers": [8, 16, 20, 24, 28],
         "hook_point": "model.layers.{layer}.mlp",
         "dtype": torch.bfloat16,
         "n_features": 131072,  # 32x expansion = 4096 * 32
+        "sae_type": "llama_scope",
     },
 }
 
@@ -178,6 +183,90 @@ def load_gold_106() -> tuple[list[dict], list[str]]:
 
 
 # =============================================================================
+# LLAMA SCOPE SAE WRAPPER
+# =============================================================================
+
+class LlamaScopeSAE:
+    """
+    Wrapper for Llama Scope SAEs (OpenMOSS).
+
+    Llama Scope uses TopK activation with a different weight format than SAELens.
+    This class provides a compatible interface for feature extraction.
+
+    Paper: https://arxiv.org/abs/2410.20526
+    """
+
+    def __init__(self, weights: dict, config: dict, device: str = "cpu"):
+        self.device = device
+        self.config = config
+
+        # Extract dimensions from weights
+        # Llama Scope format: W_enc (d_model, d_sae), W_dec (d_sae, d_model), b_enc, b_dec
+        if "encoder.weight" in weights:
+            # lm-saes format
+            self.W_enc = weights["encoder.weight"].to(device)  # (d_sae, d_model)
+            self.W_dec = weights["decoder.weight"].to(device)  # (d_model, d_sae)
+            self.b_enc = weights.get("encoder.bias", torch.zeros(self.W_enc.shape[0])).to(device)
+            self.b_dec = weights.get("decoder.bias", torch.zeros(self.W_dec.shape[0])).to(device)
+            self.n_features = self.W_enc.shape[0]
+            self.d_model = self.W_enc.shape[1]
+        else:
+            # Try alternative format
+            available_keys = list(weights.keys())
+            raise ValueError(f"Unknown Llama Scope weight format. Keys: {available_keys}")
+
+        # TopK parameter
+        self.k = config.get("k", config.get("top_k", 64))
+
+        print(f"  LlamaScopeSAE: d_model={self.d_model}, n_features={self.n_features}, k={self.k}")
+
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Encode activations to SAE features using TopK.
+
+        Args:
+            x: (batch, seq, d_model) or (batch, d_model)
+
+        Returns:
+            (batch, seq, n_features) or (batch, n_features) sparse activations
+        """
+        x = x.to(self.device)
+        original_shape = x.shape
+
+        # Flatten if needed
+        if x.dim() == 3:
+            batch, seq, d_model = x.shape
+            x = x.reshape(-1, d_model)
+        else:
+            batch, d_model = x.shape
+            seq = None
+
+        # Match dtype with encoder weights
+        x = x.to(self.W_enc.dtype)
+
+        # Pre-activation: x @ W_enc.T + b_enc
+        pre_acts = x @ self.W_enc.T + self.b_enc  # (batch*seq, n_features)
+
+        # TopK activation
+        topk_values, topk_indices = torch.topk(pre_acts, self.k, dim=-1)
+        topk_values = torch.relu(topk_values)  # ReLU on top-k values
+
+        # Create sparse output
+        acts = torch.zeros_like(pre_acts)
+        acts.scatter_(-1, topk_indices, topk_values)
+
+        # Reshape back
+        if seq is not None:
+            acts = acts.reshape(batch, seq, -1)
+
+        return acts
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        """Alias for encode."""
+        return self.encode(x)
+
+
+# =============================================================================
 # SAE FEATURE EXTRACTION
 # =============================================================================
 
@@ -201,7 +290,6 @@ class SAEFeatureExtractor:
     def load(self):
         """Load model, tokenizer, and SAE."""
         from transformers import AutoModelForCausalLM, AutoTokenizer
-        from sae_lens import SAE
 
         print(f"\n[1] Loading model: {self.config['model_id']}")
         self.tokenizer = AutoTokenizer.from_pretrained(self.config["model_id"])
@@ -222,14 +310,71 @@ class SAEFeatureExtractor:
             raise ValueError(f"No SAE available for {self.config['model_id']}. Check SAELens releases.")
 
         sae_id = self.config["sae_id_template"].format(layer=self.layer)
-        self.sae, _, _ = SAE.from_pretrained(
-            release=self.config["sae_release"],
-            sae_id=sae_id,
-            device=self.device if self.device != "mps" else "cpu",  # SAELens may not support MPS
+
+        # Check if this is a Llama Scope SAE (requires custom loader)
+        if self.config.get("sae_type") == "llama_scope":
+            self.sae = self._load_llama_scope_sae(sae_id)
+        else:
+            # Standard SAELens loading
+            from sae_lens import SAE
+            self.sae, _, _ = SAE.from_pretrained(
+                release=self.config["sae_release"],
+                sae_id=sae_id,
+                device=self.device if self.device != "mps" else "cpu",
+            )
+            print(f"  SAE loaded: {self.sae.cfg.d_sae} features")
+
+        return self
+
+    def _load_llama_scope_sae(self, sae_id: str):
+        """
+        Load Llama Scope SAE from HuggingFace.
+
+        Llama Scope SAEs use a custom format that requires direct loading
+        rather than SAELens.
+
+        Structure: fnlp/Llama3_1-8B-Base-LXM-8x/
+            Llama3_1-8B-Base-L{layer}M-8x/
+                checkpoints/final.safetensors
+                hyperparams.json
+                lm_config.json
+        """
+        from huggingface_hub import hf_hub_download
+        from safetensors.torch import load_file
+        import json
+
+        repo_id = self.config["sae_release"]
+        layer_dir = sae_id.rsplit("/", 2)[0]  # e.g., Llama3_1-8B-Base-L16M-8x
+
+        # Download files
+        print(f"  Downloading from {repo_id}/{layer_dir}...")
+        weights_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=sae_id,
+            repo_type="model",
+        )
+        config_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=f"{layer_dir}/hyperparams.json",
+            repo_type="model",
         )
 
-        print(f"  SAE loaded: {self.sae.cfg.d_sae} features")
-        return self
+        # Load config
+        with open(config_path) as f:
+            sae_config = json.load(f)
+
+        # Load weights
+        weights = load_file(weights_path)
+        print(f"  Weights keys: {list(weights.keys())}")
+
+        # Create a simple SAE wrapper
+        sae = LlamaScopeSAE(
+            weights=weights,
+            config=sae_config,
+            device=self.device if self.device != "mps" else "cpu",
+        )
+        print(f"  Llama Scope SAE loaded: {sae.n_features} features")
+        return sae
 
     def extract_features(
         self,
