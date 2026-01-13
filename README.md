@@ -46,6 +46,7 @@ Text → Gemma-3-27B → SAE Features → LogisticRegression → P(alignment_fak
 detector/
 ├── README.md                 # This file
 ├── DESIGN.md                 # Full system design document
+├── VALIDATION.md             # Intent vs keyword validation analysis
 ├── probe_spec.json           # Feature indices and hyperparameters
 ├── requirements.txt          # Python dependencies
 │
@@ -243,11 +244,19 @@ The training data (alignment_faking.json, hard_negative.json, aligned.json) is f
 
 ## Known Limitations
 
-1. **Model-specific**: Features are for Gemma-3-27B; won't transfer to other models
-2. **Binary only**: AF vs non-AF; no multi-class
-3. **Distribution shift**: 93% train → 72% test indicates generalization gap
-4. **No interpretability**: We don't know what the 8 features semantically encode
-5. **Training data**: Requires access to private dataset or equivalent
+1. **Model-specific**: Features are for Gemma-3-27B; won't transfer to other models without new SAEs
+2. **Binary only**: AF vs non-AF; no multi-class severity levels
+3. **Distribution shift**: 93% train → 72% test indicates generalization gap (training data from one source, gold_106 hand-labeled differently)
+4. **Training data**: Requires access to private dataset or equivalent Opus-curated samples
+5. **Not tested on streaming**: Only validated on static scratchpads, not real-time conversation
+
+## What Would Make This Publishable
+
+1. **Interpretability deep-dive** — Use Neuronpedia or max-activating examples to fully characterize each feature
+2. **Cross-model validation** — Test if features generalize to Claude 3 Opus (the original AF model)
+3. **Real-time monitoring demo** — Show it works on streaming conversation
+4. **Adversarial robustness** — Can paraphrased AF reasoning evade detection?
+5. **Baseline comparison** — Compare 72% to fine-tuned classifier, GPT-4 judge, keyword regex
 
 ## Citation
 
