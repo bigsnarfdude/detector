@@ -97,17 +97,16 @@ def load_data():
 # =============================================================================
 
 def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
-    """Extract SAE features for a single layer.
+    """Extract SAE features using top-k latent IDs as categorical features.
 
-    Returns simple aggregation over top-k activations per sample:
-    - Mean of top-k activations (overall magnitude)
-    - Std of top-k activations (activation spread)
-    - Max activation
-    - Latent histogram features (binned latent indices)
+    For TopK SAEs, the key discriminative info is WHICH latents fire.
+    We count occurrences of specific latent IDs per sample.
     """
     n_latents = sae.num_latents
-    n_bins = 1000  # Bin latents into 1000 groups
     features = []
+
+    # We'll collect all indices first, then find the most common ones
+    all_sample_indices = []
 
     for i, text in enumerate(texts):
         if i % 50 == 0:
@@ -133,42 +132,38 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
         top_acts = encoder_output.top_acts.cpu().float()  # [seq, k]
         top_indices = encoder_output.top_indices.cpu()    # [seq, k]
 
-        # Global activation stats
-        all_acts = top_acts.flatten()
-        global_mean = all_acts.mean().item()
-        global_std = all_acts.std().item()
-        global_max = all_acts.max().item()
-        global_min = all_acts.min().item()
+        # Count frequency of each latent in this sample
+        latent_counts = torch.zeros(n_latents)
+        latent_sums = torch.zeros(n_latents)
 
-        # Histogram of which latent bins are activated
-        bin_size = n_latents // n_bins
-        all_indices = top_indices.flatten()
-        latent_bins = all_indices // bin_size
-        hist = torch.histc(latent_bins.float(), bins=n_bins, min=0, max=n_bins-1)
-        hist = hist / hist.sum()  # Normalize
+        for idx, act in zip(top_indices.flatten(), top_acts.flatten()):
+            latent_counts[idx.item()] += 1
+            latent_sums[idx.item()] += act.item()
 
-        # Per-position aggregates
-        seq_mean_act = top_acts.mean(dim=1)  # [seq]
-        seq_max_act = top_acts.max(dim=1).values  # [seq]
-
-        # Sequence-level stats
-        seq_stats = torch.tensor([
-            seq_mean_act.mean().item(),
-            seq_mean_act.std().item(),
-            seq_max_act.mean().item(),
-            seq_max_act.std().item(),
-        ])
-
-        # Combine all features
-        sample_features = np.concatenate([
-            np.array([global_mean, global_std, global_max, global_min]),
-            seq_stats.numpy(),
-            hist.numpy(),
-        ])
-        features.append(sample_features)
+        all_sample_indices.append((latent_counts, latent_sums))
 
         if i % 20 == 0:
             torch.cuda.empty_cache()
+
+    # Find the most frequently activated latents across ALL samples
+    total_counts = torch.stack([x[0] for x in all_sample_indices]).sum(dim=0)
+    top_latents = torch.argsort(total_counts, descending=True)[:5000]  # Top 5000 latents
+
+    print(f"  Selected {len(top_latents)} most active latents")
+    print(f"  Top latent IDs: {top_latents[:20].tolist()}")
+
+    # Extract features for selected latents only
+    for latent_counts, latent_sums in all_sample_indices:
+        # Frequency features for top latents
+        freq_feats = latent_counts[top_latents].numpy()
+        # Sum features for top latents
+        sum_feats = latent_sums[top_latents].numpy()
+        # Mean features (avoiding div by zero)
+        mean_feats = np.where(freq_feats > 0, sum_feats / freq_feats, 0)
+
+        # Stack: [freq, sum, mean] for each latent = 15000 features
+        sample_features = np.concatenate([freq_feats, sum_feats, mean_feats])
+        features.append(sample_features)
 
     return np.array(features)
 
@@ -237,12 +232,10 @@ def main():
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
 
-        # Use L1 regularization for sparse feature selection
+        # Use L2 regularization (default)
         probe = LogisticRegression(
-            penalty="l1",
-            solver="saga",
-            C=0.01,
-            max_iter=1000,
+            C=1.0,
+            max_iter=2000,
             random_state=42,
         )
 
