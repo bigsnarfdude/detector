@@ -1,0 +1,30 @@
+# Pinned dependencies for exact reproducibility
+# MATS Application - January 2026
+#
+# Install: pip install -r requirements-pinned.txt
+
+# Core ML
+torch==2.1.2
+transformers==4.37.2
+safetensors==0.4.2
+
+# SAE Analysis
+sae-lens==4.0.0
+sparsify==0.1.0  # For EleutherAI SAEs
+
+# HuggingFace
+huggingface-hub==0.21.4
+
+# Scientific computing
+numpy==1.26.4
+scikit-learn==1.4.0
+
+# Visualization
+matplotlib==3.8.2
+
+# Inference optimization
+accelerate==0.27.2
+bitsandbytes==0.42.0  # For 8-bit quantization (Llama)
+
+# Note: Install torch with CUDA support separately:
+# pip install torch==2.1.2+cu121 --index-url https://download.pytorch.org/whl/cu121

@@ -50,6 +50,10 @@ detector/
 ├── probe_spec.json           # Feature indices and hyperparameters
 ├── requirements.txt          # Python dependencies
 │
+├── cascade/                  # Two-stage safety cascade
+│   ├── safety_cascade.py     # SafetyCascade, HaikuCascade classes
+│   └── README.md             # Cascade architecture docs
+│
 ├── scripts/
 │   ├── original_72_percent_experiment.py   # Main experiment (verified 72%)
 │   ├── validate_intent_vs_keywords.py      # Ablation study validation
@@ -69,6 +73,47 @@ detector/
 │
 └── results/                  # Earlier experiments (Gemma-2B)
 ```
+
+## Safety Cascade (Production Architecture)
+
+Two-stage detection: **accuracy** (Stage 1) + **explainability** (Stage 2).
+
+```
+Trace → [Stage 1: v2 Detector (98%)] → P(AF)
+                    │
+        ┌───────────┴───────────┐
+        │                       │
+   P(AF) < 0.2             P(AF) > 0.2
+        │                       │
+        ▼                       ▼
+     ALIGNED          [Stage 2: SAE Probe]
+     (pass)                     │
+                                ▼
+                         Human Review
+                         + Explanation
+```
+
+### Usage
+
+```python
+from cascade import SafetyCascade
+
+cascade = SafetyCascade()
+result = cascade.classify(reasoning_trace)
+
+if result.review:
+    print(f"Flagged: {result.label}")
+    print(f"Why: {result.explanation}")
+```
+
+### Why Two Stages?
+
+| Stage | Purpose | Output |
+|-------|---------|--------|
+| Stage 1 (v2 detector) | Fast, accurate classification | P(AF) |
+| Stage 2 (SAE probe) | Interpretable explanation | Feature activations |
+
+Stage 2 tells you **which features fired** (self-preservation, training awareness, etc.) — not just the classification.
 
 ## Component Usage
 
@@ -275,11 +320,19 @@ The training data (alignment_faking.json, hard_negative.json, aligned.json) is f
 
 ## Cross-Model Comparison
 
-| Detector | Type | AUROC | Parameters |
-|----------|------|-------|------------|
-| **Llama-8B Fine-tuned** | Full LoRA fine-tune | **91.66%** | ~8B |
-| **Keyword Regex** | Pattern matching | **75.06%** | 41 patterns |
-| **Gemma SAE Probe** | 8 SAE features | **72.01%** | 32 weights |
+All results on **gold_106** (hand-labeled held-out test set, n=106).
+
+| Detector | Type | Test AUROC | CV AUROC | Notes |
+|----------|------|------------|----------|-------|
+| **Llama-8B Fine-tuned** | LoRA fine-tune | **91.66%** | - | Best overall |
+| **Llama-8B SAE Probe** | SAE features | 79.64% | 98.85% | EleutherAI L20 |
+| **GPT-OSS 20B SAE Probe** | SAE features | 74.26% | 98.73% | Goodfire L15 |
+| **Keyword Regex** | Pattern matching | 75.06% | - | 41 patterns |
+| **Gemma-3-27B SAE Probe** | 8 SAE features | 72.01% | 93.47% | GemmaScope L31,40,53 |
+
+### Reproducibility
+
+See **[REPRODUCTION.md](REPRODUCTION.md)** for exact steps to reproduce all experiments with pinned dependencies.
 
 ### Key Finding: Keyword Baseline Outperforms SAE Probe
 
