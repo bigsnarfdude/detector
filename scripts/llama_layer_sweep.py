@@ -97,21 +97,22 @@ def load_data():
 # =============================================================================
 
 def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
-    """Extract SAE features for a single layer using TopK frequency and magnitude.
+    """Extract SAE features for a single layer.
 
-    For TopK SAEs, we use:
-    - Frequency: how often each latent appears in top-k
-    - Max activation: highest activation when latent is in top-k
-    - Sum activation: total activation across sequence
+    Returns simple aggregation over top-k activations per sample:
+    - Mean of top-k activations (overall magnitude)
+    - Std of top-k activations (activation spread)
+    - Max activation
+    - Latent histogram features (binned latent indices)
     """
     n_latents = sae.num_latents
+    n_bins = 1000  # Bin latents into 1000 groups
     features = []
 
     for i, text in enumerate(texts):
         if i % 50 == 0:
             print(f"  Processing {i}/{len(texts)}...")
 
-        # Tokenize with shorter max length to save memory
         tokens = tokenizer(
             text,
             return_tensors="pt",
@@ -121,49 +122,51 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
         )
         tokens = {k: v.to(model.device) for k, v in tokens.items()}
 
-        # Forward pass with hidden states
         with torch.no_grad():
             outputs = model(**tokens, output_hidden_states=True)
 
-        # Get hidden state at target layer (+1 because index 0 is embeddings)
         hidden = outputs.hidden_states[layer_idx + 1]
-        hidden = hidden.squeeze(0)  # [seq, hidden_dim]
+        hidden = hidden.squeeze(0).to(torch.bfloat16)
 
-        # Cast to match SAE dtype (bfloat16)
-        hidden = hidden.to(torch.bfloat16)
-
-        # Encode through SAE - TopK returns sparse activations
+        # Encode through SAE
         encoder_output = sae.encode(hidden)
         top_acts = encoder_output.top_acts.cpu().float()  # [seq, k]
         top_indices = encoder_output.top_indices.cpu()    # [seq, k]
 
-        seq_len = top_acts.shape[0]
+        # Global activation stats
+        all_acts = top_acts.flatten()
+        global_mean = all_acts.mean().item()
+        global_std = all_acts.std().item()
+        global_max = all_acts.max().item()
+        global_min = all_acts.min().item()
 
-        # Efficient sparse aggregation using scatter_add
-        # Frequency: how often each latent is in top-k
-        freq = torch.zeros(n_latents)
-        freq.scatter_add_(0, top_indices.flatten(), torch.ones_like(top_acts.flatten()))
+        # Histogram of which latent bins are activated
+        bin_size = n_latents // n_bins
+        all_indices = top_indices.flatten()
+        latent_bins = all_indices // bin_size
+        hist = torch.histc(latent_bins.float(), bins=n_bins, min=0, max=n_bins-1)
+        hist = hist / hist.sum()  # Normalize
 
-        # Sum of activations per latent
-        sum_acts = torch.zeros(n_latents)
-        sum_acts.scatter_add_(0, top_indices.flatten(), top_acts.flatten())
+        # Per-position aggregates
+        seq_mean_act = top_acts.mean(dim=1)  # [seq]
+        seq_max_act = top_acts.max(dim=1).values  # [seq]
 
-        # Max activation per latent (use scatter_reduce)
-        max_acts = torch.zeros(n_latents)
-        for t in range(seq_len):
-            for j in range(top_indices.shape[1]):
-                idx = top_indices[t, j].item()
-                max_acts[idx] = max(max_acts[idx], top_acts[t, j].item())
+        # Sequence-level stats
+        seq_stats = torch.tensor([
+            seq_mean_act.mean().item(),
+            seq_mean_act.std().item(),
+            seq_max_act.mean().item(),
+            seq_max_act.std().item(),
+        ])
 
-        # Mean activation (sum / freq, avoiding div by zero)
-        mean_acts = sum_acts / (freq + 1e-8)
-        mean_acts[freq == 0] = 0
+        # Combine all features
+        sample_features = np.concatenate([
+            np.array([global_mean, global_std, global_max, global_min]),
+            seq_stats.numpy(),
+            hist.numpy(),
+        ])
+        features.append(sample_features)
 
-        # Stack features: [freq, max, sum, mean] for each latent
-        stats = torch.stack([freq, max_acts, sum_acts, mean_acts], dim=1)
-        features.append(stats.detach().numpy().flatten())
-
-        # Clear cache periodically
         if i % 20 == 0:
             torch.cuda.empty_cache()
 
