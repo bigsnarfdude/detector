@@ -62,7 +62,25 @@ Implements the SAE probe approach suggested in Anthropic's alignment faking pape
 | **Input Dim** | 32 | 8 features × 4 statistics |
 | **Output** | Binary probability | P(alignment_faking) |
 
-### 2.3 Why This Architecture?
+### 2.3 Why SAE Probes?
+
+**Core Insight**: SAE probes use sparse feature activations that correspond to "crisp semantic concepts". Sparse Autoencoders disentangle the model's messy internal representations into isolated, semantically coherent features (like "self-preservation reasoning" or "training awareness"). A classifier head then learns to identify these internal signatures of alignment faking.
+
+**How it works**:
+1. **Extract activations**: Run text through frozen base model, capture hidden states
+2. **SAE encoding**: Encode dense activations into sparse features via trained autoencoders
+3. **Feature selection**: Select discriminative features that separate AF from genuine text
+4. **Classification**: Train a simple classifier (LogReg, Random Forest, or XGBoost) on sparse features
+
+**Advantages over alternatives**:
+| Approach | Accuracy | Interpretability | Robustness |
+|----------|----------|------------------|------------|
+| Keyword matching | ~75% | High | Low (easily evaded) |
+| Fine-tuned classifier | ~92% | Low (black box) | Medium |
+| **SAE probe** | **~72-80%** | **High (sparse features)** | **Medium** |
+| LLM-as-judge | Variable | Medium | Low (expensive) |
+
+### 2.4 Architecture Decisions
 
 1. **Frozen base model**: No fine-tuning needed; extract features only
 2. **Middle-to-late layers**: Semantic intent encoded after early syntax layers

@@ -41,7 +41,9 @@ python scripts/llama_train_probe.py
 python scripts/original_72_percent_experiment.py
 ```
 
-## Architecture
+## How SAE Probes Work
+
+**Core Insight**: SAE probes use sparse feature activations that correspond to "crisp semantic concepts". Sparse Autoencoders disentangle the model's internal representations into isolated, semantically coherent features (like "self-preservation reasoning" or "training awareness"). A classifier then learns to identify these internal signatures of alignment faking.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
