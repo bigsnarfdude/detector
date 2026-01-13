@@ -240,20 +240,25 @@ def main():
 
     # Load training data to fit probe (SEPARATE from test data)
     print("\n[3/4] Loading TRAINING data and fitting probe...")
-    with open("data/combined/alignment_faking.json") as f:
-        af = json.load(f).get("samples", [])
-    with open("data/combined/hard_negative.json") as f:
-        hn = json.load(f).get("samples", [])
-    with open("data/combined/aligned.json") as f:
-        al = json.load(f).get("samples", [])
+    train_path = hf_hub_download(
+        repo_id="vincentoh/alignment-faking-training",
+        filename="training_data_final.json",
+        repo_type="dataset",
+    )
+    with open(train_path) as f:
+        train_data = json.load(f)
+    all_train = train_data.get("samples", train_data)
+
+    # Separate AF vs non-AF samples
+    af = [s for s in all_train if s.get("label", "") in ["alignment_faking", "potential_faking", "af", "AF"]]
+    non_af = [s for s in all_train if s.get("label", "") not in ["alignment_faking", "potential_faking", "af", "AF"]]
 
     rng = np.random.default_rng(42)
     af_sub = list(rng.choice(af, min(200, len(af)), replace=False))
-    hn_sub = list(rng.choice(hn, min(200, len(hn)), replace=False))
-    al_sub = list(rng.choice(al, min(200, len(al)), replace=False))
+    non_af_sub = list(rng.choice(non_af, min(400, len(non_af)), replace=False))
 
-    train_texts = [s["text"] for s in af_sub + hn_sub + al_sub]
-    y_train = np.array([1]*len(af_sub) + [0]*len(hn_sub) + [0]*len(al_sub))
+    train_texts = [s["text"] for s in af_sub + non_af_sub]
+    y_train = np.array([1]*len(af_sub) + [0]*len(non_af_sub))
 
     # Extract features
     print("  Extracting training features...")
@@ -421,7 +426,7 @@ def main():
     results = {
         "methodology": {
             "test_set": "gold_106 (held-out, never trained on)",
-            "training_set": "data/combined/{alignment_faking,hard_negative,aligned}.json",
+            "training_set": "vincentoh/alignment-faking-training/training_data_final.json",
             "n_af_test": len(af_test_samples),
             "n_genuine_test": len(genuine_test_samples),
         },

@@ -1,0 +1,33 @@
+{
+  "methodology": {
+    "test_set": "gold_106 (held-out, never trained on)",
+    "training_set": "vincentoh/alignment-faking-training/training_data_final.json",
+    "n_af_test": 51,
+    "n_genuine_test": 55
+  },
+  "keyword_ablation": {
+    "original_mean": 0.6548354155956725,
+    "ablated_mean": 0.37410673788937027,
+    "drop_percent": 42.870112248119135,
+    "correlation": 0.7818170004405801
+  },
+  "keyword_stuffing": {
+    "genuine_mean": 0.3239899680259066,
+    "stuffed_mean": 0.36614293426491207,
+    "increase_percent": 13.010577610117496,
+    "correlation": 0.9530693777651977
+  },
+  "minimal_pairs": {
+    "gaps": [
+      0.0009856866986571221,
+      0.4209633788839097,
+      0.22338554972323513,
+      0.004220584016641459,
+      0.6385867782099985
+    ],
+    "avg_gap": 0.2576283955064884
+  },
+  "feature_analysis": {
+    "keyword_features_count": 2
+  }
+}
