@@ -157,7 +157,7 @@ def main():
             token_acts = get_token_activations(text, model, tokenizer, transcoders)
 
             for name, tok_acts in token_acts.items():
-                for tok, act in tok_acts:
+                for idx, (tok, act) in enumerate(tok_acts):
                     if act > 0.1:  # Threshold for "activated"
                         clean_tok = tok.replace("▁", " ").strip()
                         if len(clean_tok) > 1:  # Skip single chars
@@ -166,8 +166,7 @@ def main():
 
                             # Track max activations with context
                             if act > 1.0:  # Strong activation
-                                # Get context around this token
-                                idx = [t for t, _ in tok_acts].index(tok)
+                                # Get context around this token (use idx from enumerate, not .index())
                                 start = max(0, idx - 5)
                                 end = min(len(tok_acts), idx + 5)
                                 context = "".join([t.replace("▁", " ") for t, _ in tok_acts[start:end]])

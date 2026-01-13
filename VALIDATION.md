@@ -1,15 +1,23 @@
 # Validation: Intent Detection vs Keyword Matching
 
-This document presents evidence that the probe detects **strategic intent**, not surface-level keyword patterns.
+This document presents evidence about whether the probe detects **strategic intent** or surface-level keyword patterns.
+
+## ⚠️ CRITICAL METHODOLOGY NOTE
+
+**Previous validation results (before commit XXXXX) were flawed.** The ablation tests ran on *training data*, not held-out test data. This means the probe could have been memorizing samples rather than learning generalizable intent detection.
+
+**Fixed version:** All ablation tests now use **gold_106** (held-out, never trained on).
 
 ## Summary of Evidence
 
 | Test | Result | What It Proves |
 |------|--------|----------------|
-| Keyword Ablation | -2.5% (stayed high) | Probe doesn't rely on "training", "RLHF", etc. |
-| Keyword Stuffing | 0.098 → 0.138 | Adding trigger words doesn't fool it |
+| Keyword Ablation | **PENDING RE-RUN** | Needs re-run on held-out data |
+| Keyword Stuffing | **PENDING RE-RUN** | Needs re-run on held-out data |
 | Feature Analysis | 7/8 semantic | Features fire on "preserve", "values", "capacity" |
 | **Keyword Baseline** | **75.06% vs 72.01%** | **Keywords alone outperform SAE probe** |
+
+**To get valid results, re-run:** `python scripts/validate_intent_vs_keywords.py`
 
 ## The 8 Features Encode Self-Preservation Semantics
 
