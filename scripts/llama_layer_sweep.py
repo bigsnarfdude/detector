@@ -148,19 +148,27 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # Load model with memory optimizations
-    print("\n[MODEL] Loading Llama-3-8B...")
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
-        torch_dtype=torch.float16,
-        device_map="cuda:0",  # Explicit device instead of auto
-        low_cpu_mem_usage=True,
-    )
+    # Load model with 8-bit quantization to fit in 16GB
+    print("\n[MODEL] Loading Llama-3-8B (8-bit quantized)...")
+    try:
+        from transformers import BitsAndBytesConfig
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_NAME,
+            quantization_config=quantization_config,
+            device_map="auto",
+            low_cpu_mem_usage=True,
+        )
+    except ImportError:
+        print("  bitsandbytes not available, trying float16 with CPU offload...")
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_NAME,
+            torch_dtype=torch.float16,
+            device_map="auto",
+            offload_folder="offload",
+            low_cpu_mem_usage=True,
+        )
     model.eval()
-
-    # Enable memory efficient settings
-    if hasattr(model, 'gradient_checkpointing_enable'):
-        model.gradient_checkpointing_enable()
 
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     if tokenizer.pad_token is None:
