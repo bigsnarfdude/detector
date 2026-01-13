@@ -1,0 +1,24 @@
+{
+  "model": "meta-llama/Meta-Llama-3-8B",
+  "sae_release": "EleutherAI/sae-llama-3-8b-32x",
+  "timestamp": "2026-01-13T08:51:51.533497",
+  "n_features": 24,
+  "training": {
+    "cv_auroc_mean": 0.9885200000000001,
+    "cv_auroc_std": 0.006629147758196374,
+    "n_samples": 1000
+  },
+  "gold_106": {
+    "auroc": 0.7964349376114083,
+    "accuracy": 0.6509433962264151,
+    "precision": 0.5945945945945946,
+    "recall": 0.8627450980392157,
+    "n_samples": 106
+  },
+  "comparison": {
+    "llama_finetuned": 0.9166,
+    "keyword_baseline": 0.7506,
+    "gemma_sae_probe": 0.7201,
+    "llama_sae_probe": 0.7964349376114083
+  }
+}
