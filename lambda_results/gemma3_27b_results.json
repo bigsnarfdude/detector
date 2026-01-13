@@ -1,0 +1,7 @@
+{
+  "model": "gemma-3-27b-it",
+  "train_cv_auroc": 0.9347200000000001,
+  "gold106_auroc": 0.7201426024955436,
+  "n_train": 1500,
+  "n_test": 106
+}
