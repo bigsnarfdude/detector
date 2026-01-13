@@ -595,6 +595,8 @@ Extending to 3-class would require relabeling and retraining.
 3. **Feature interpretation**: Map SAE features to human-readable concepts
 4. **Real-time detection**: Optimize inference for production use
 5. **Larger evaluation set**: gold_106 is small (n=106); need more hand-labeled data
+6. **Chunking + overlap**: Process text in 128-token chunks with 32-token overlap to control for activation norm drift (per Goodfire/Rakuten). May help with long scratchpads, though AF intent is often concentrated rather than scattered like PII.
+7. **Class weights**: Try sqrt(inverse frequency) class weights during probe training to handle class imbalance
 
 ---
 
