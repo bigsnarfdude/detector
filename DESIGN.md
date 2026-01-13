@@ -14,9 +14,10 @@
 This system detects **alignment faking intent** in large language model outputs using Sparse Autoencoder (SAE) feature probes. Unlike keyword matching approaches that detect surface patterns, this method identifies the *internal representations* of strategic deception vs genuine compliance.
 
 ### Key Result
-- **72.01% AUROC** on held-out gold_106 evaluation set
+- **76.26% AUROC** on held-out gold_106 evaluation set
 - Trained on synthetic Opus-curated data, generalizes to hand-labeled real examples
 - Uses only 8 discriminative SAE features (32-dimensional input to probe)
+- Beats keyword baseline (76% vs 75%)
 
 ### Research Context
 Implements the SAE probe approach suggested in Anthropic's alignment faking paper:
@@ -668,7 +669,7 @@ For comparison purposes, experiments were also run on Llama-3-8B with EleutherAI
 
 | Model | SAE | Best AUROC | Classifier | Notes |
 |-------|-----|------------|------------|-------|
-| **Gemma-3-27B** | GemmaScope-2 | 72.01% | LogReg | Primary detector |
+| **Gemma-3-27B** | GemmaScope-2 | **76.26%** | LogReg | Primary detector |
 | Llama-3-8B | EleutherAI | 85.92% | RandomForest | Comparison only |
 
 **Why Gemma is primary**: Llama results are inflated due to potential data contamination and lower model quality for this task. Gemma-3-27B provides more reliable detection of alignment faking intent.

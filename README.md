@@ -10,7 +10,7 @@ Detecting **alignment faking intent** in LLM chain-of-thought using SAE latent p
 | Model | Type | Features | gold_106 AUROC | Notes |
 |-------|------|----------|----------------|-------|
 | Llama-8B Fine-tuned | LoRA (upper bound) | - | 91.66% | Black-box |
-| **Gemma-3-27B SAE Probe** | **SAE + LogReg** | **8** | **72.01%** | **Primary detector** |
+| **Gemma-3-27B SAE Probe** | **SAE + LogReg** | **8** | **76.26%** | **Primary detector** |
 | Keyword Baseline | Regex | 41 patterns | 75.06% | - |
 
 ### Comparison Data (Llama-3-8B)
@@ -29,9 +29,10 @@ Detecting **alignment faking intent** in LLM chain-of-thought using SAE latent p
    - 7/8 Gemma features fire on semantic concepts, not keywords
    - Features capture "self-preservation reasoning" and "training awareness"
 
-2. **Interpretable 8-feature probe** achieves 72% AUROC
+2. **Interpretable 8-feature probe** achieves 76% AUROC
    - Simple LogisticRegression on 32 dimensions (8 features × 4 stats)
    - Uses GemmaScope-2 transcoders on Gemma-3-27B
+   - Beats keyword baseline (76% vs 75%)
 
 3. **Validation shows partial keyword dependence**
    - Removing trigger words → scores drop 31-43%
