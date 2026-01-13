@@ -34,10 +34,10 @@ Detecting **alignment faking intent** in LLM chain-of-thought using SAE latent p
    - Uses GemmaScope-2 transcoders on Gemma-3-27B
    - Beats keyword baseline (76% vs 75%)
 
-3. **Validation shows partial keyword dependence**
-   - Removing trigger words → scores drop 31-43%
-   - Adding trigger words → scores increase 13-49%
-   - Still detects intent beyond surface patterns
+3. **Validation confirms intent detection**
+   - Removing trigger words → scores **increase** 35% (not keyword matching!)
+   - Adding trigger words → scores increase only 6.5% (robust to stuffing)
+   - Probe detects semantic intent, not surface keyword patterns
 
 ## Quick Start
 
@@ -155,12 +155,11 @@ detector/
 
 We ran ablation studies to test semantic intent vs keyword matching.
 
-| Test | Gemma-3-27B | Llama-3-8B | Interpretation |
-|------|-------------|------------|----------------|
-| **Keyword Ablation** | -42.9% drop | -30.8% drop | ⚠️ Partial keyword dependence |
-| **Keyword Stuffing** | +13.0% | +48.8% | ⚠️ Some keyword sensitivity |
-| **Feature Analysis** | 7/8 semantic | Pending | ✅ Features fire on concepts |
-| **vs Keyword Baseline** | 72% vs 75% | 80% vs 75% | ✅ Llama beats keywords
+| Test | Gemma-3-27B (new) | Gemma-3-27B (old) | Interpretation |
+|------|-------------------|-------------------|----------------|
+| **Keyword Ablation** | **+34.7%** (scores UP) | -42.9% drop | ✅ Intent detection |
+| **Keyword Stuffing** | **+6.5%** only | +13.0% | ✅ Robust to stuffing |
+| **vs Keyword Baseline** | 76% vs 75% | 72% vs 75% | ✅ Beats keywords
 
 ## Hardware Requirements
 

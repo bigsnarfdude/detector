@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-01-13T21:30:27.127019",
+  "model": "google/gemma-3-27b-it",
+  "sae": "google/gemma-scope-2-27b-it",
+  "keyword_ablation": {
+    "original_mean": 0.7148966299375948,
+    "ablated_mean": 0.9630763598184185,
+    "drop_percent": -34.71547066916345
+  },
+  "keyword_stuffing": {
+    "genuine_mean": 0.39634731503705545,
+    "stuffed_mean": 0.42216896044925273,
+    "increase_percent": 6.514903578893465
+  }
+}
