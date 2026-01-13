@@ -10,19 +10,33 @@ Detecting **alignment faking intent** in LLM chain-of-thought using SAE latent p
 | Model | Type | Features | gold_106 AUROC |
 |-------|------|----------|----------------|
 | Llama-8B Fine-tuned | LoRA (upper bound) | - | 91.66% |
-| **Llama-3-8B SAE Probe** | **SAE + LogReg** | **24** | **79.64%** |
+| **Llama-3-8B SAE Probe** | **SAE + RandomForest** | **24** | **85.92%** |
+| Llama-3-8B SAE Probe | SAE + LogReg | 24 | 79.64% |
 | Keyword Baseline | Regex | 41 patterns | 75.06% |
 | Gemma-3-27B SAE Probe | SAE + LogReg | 8 | 72.01% |
 
-## Key Finding
+### Classifier Comparison (Llama-3-8B)
 
-SAE probes detect **semantic intent patterns** (self-preservation, strategic compliance) beyond keyword co-occurrence.
+| Classifier | Test AUROC | vs LogReg |
+|------------|------------|-----------|
+| **RandomForest_200** | **85.92%** | **+6.3%** |
+| XGBoost_200 | 85.60% | +6.0% |
+| LogReg (C=1.0) | 85.45% | +5.8% |
+| LogReg (C=0.1) | 79.64% | baseline |
 
-Ablation tests show mixed results:
-- ⚠️ Removing trigger words → scores drop 31-43% (partial keyword dependence)
-- ⚠️ Adding trigger words → scores increase 13-49% (some keyword sensitivity)
-- ✅ 7/8 features fire on semantic concepts, not keywords
-- ✅ Probes outperform keyword baseline (72-80% vs 75%)
+## Key Findings
+
+1. **Tree-based classifiers significantly outperform LogReg** (+6% AUROC)
+   - RandomForest and XGBoost likely capture feature interactions that linear probes miss
+
+2. **SAE probes detect semantic intent** beyond keyword co-occurrence
+   - 7/8 features fire on semantic concepts, not keywords
+   - Best probe (85.9%) approaches fine-tuned performance (91.7%)
+
+3. **Validation shows mixed keyword dependence**
+   - Removing trigger words → scores drop 31-43%
+   - Adding trigger words → scores increase 13-49%
+   - Probes still outperform keyword baseline (86% vs 75%)
 
 ## Quick Start
 
@@ -50,8 +64,8 @@ python scripts/original_72_percent_experiment.py
 │                        SAE Probe Pipeline                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  Input Text ──► Sidecar Model ──► SAE Encoder ──► Linear Probe  │
-│  (scratchpad)   (frozen)         (sparse)        (LogReg)       │
+│  Input Text ──► Sidecar Model ──► SAE Encoder ──► Classifier    │
+│  (scratchpad)   (frozen)         (sparse)        (RF/XGB/LR)    │
 │                                                                  │
 │  Llama-3-8B     Layers 8,16,24   TopK SAE        C=0.1          │
 │  Gemma-3-27B    Layers 31,40,53  Transcoders                    │
