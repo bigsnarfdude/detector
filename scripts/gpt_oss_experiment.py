@@ -239,24 +239,19 @@ def load_goodfire_sae():
     """Load Goodfire SAE weights."""
     print("\n[SAE] Loading Goodfire SAE...")
 
-    # Download SAE weights
+    # Download SAE weights - Goodfire hackathon format is .pt file
     weights_path = hf_hub_download(
         repo_id=SAE_REPO,
-        filename="sae_weights.safetensors",
+        filename="topk_sae_l15_exp16_k32.pt",
     )
 
-    config_path = hf_hub_download(
-        repo_id=SAE_REPO,
-        filename="config.json",
-    )
+    weights = torch.load(weights_path, map_location="cpu")
 
-    from safetensors.torch import load_file
-    weights = load_file(weights_path)
+    # Config from filename: exp16 = expansion 16x, k32 = TopK 32
+    config = {"expansion": 16, "k": 32}
 
-    with open(config_path) as f:
-        config = json.load(f)
-
-    print(f"  Config: {config}")
+    print(f"  Loaded: {weights_path}")
+    print(f"  Keys: {list(weights.keys())}")
 
     return weights, config
 
@@ -268,25 +263,19 @@ class GoodfireSAE:
         self.device = device
         self.config = config
 
-        # Extract weights - Goodfire format
-        if "W_enc" in weights:
-            self.W_enc = weights["W_enc"].to(device)
-            self.W_dec = weights["W_dec"].to(device)
-            self.b_enc = weights.get("b_enc", torch.zeros(self.W_enc.shape[0])).to(device)
-        elif "encoder.weight" in weights:
-            self.W_enc = weights["encoder.weight"].to(device)
-            self.W_dec = weights["decoder.weight"].to(device)
-            self.b_enc = weights.get("encoder.bias", torch.zeros(self.W_enc.shape[0])).to(device)
-        else:
-            # Try to find the weights
-            print(f"  Available keys: {list(weights.keys())}")
-            raise ValueError("Unknown SAE weight format")
+        # Goodfire hackathon format:
+        # encoder_linear.weight: [d_sae, d_model]
+        # decoder.weight: [d_sae, d_model]
+        # decoder_bias: [d_model]
+        self.W_enc = weights["encoder_linear.weight"].to(device)  # [46080, 2880]
+        self.W_dec = weights["decoder.weight"].to(device)  # [46080, 2880]
+        self.b_dec = weights["decoder_bias"].to(device)  # [2880]
 
-        self.d_model = self.W_enc.shape[-1] if self.W_enc.dim() == 2 else self.W_enc.shape[1]
-        self.d_sae = self.W_enc.shape[0] if self.W_enc.dim() == 2 else self.W_enc.shape[0]
+        self.d_sae = self.W_enc.shape[0]  # 46080
+        self.d_model = self.W_enc.shape[1]  # 2880
 
-        # TopK parameter
-        self.k = config.get("k", config.get("top_k", 64))
+        # TopK parameter from config
+        self.k = config.get("k", 32)
 
         print(f"  d_model: {self.d_model}, d_sae: {self.d_sae}, k: {self.k}")
 
@@ -294,16 +283,14 @@ class GoodfireSAE:
         """Encode activations to SAE features using TopK."""
         x = x.to(self.device).float()
 
-        # Linear projection
-        if self.W_enc.dim() == 2:
-            pre_acts = x @ self.W_enc.T + self.b_enc
-        else:
-            pre_acts = x @ self.W_enc + self.b_enc
+        # Linear projection: x @ W_enc.T -> [batch, d_sae]
+        # W_enc is [d_sae, d_model], so W_enc.T is [d_model, d_sae]
+        pre_acts = x @ self.W_enc.T  # No encoder bias in this SAE
 
         # TopK activation
         topk_values, topk_indices = torch.topk(pre_acts, self.k, dim=-1)
 
-        # Create sparse output
+        # Create sparse output with ReLU
         result = torch.zeros_like(pre_acts)
         result.scatter_(-1, topk_indices, torch.relu(topk_values))
 
