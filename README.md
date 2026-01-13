@@ -184,12 +184,33 @@ These were selected because they discriminate AF from non-AF samples. Semantic i
 - [ ] Run `original_72_percent_experiment.py`
 - [ ] Verify: Train CV ~93.5%, gold_106 ~72%
 
+## Common Pitfalls
+
+| Pitfall | Problem | Solution |
+|---------|---------|----------|
+| HF_TOKEN not set | Gated model download fails | `export HF_TOKEN=your_token` |
+| Wrong hook point | Gemma-3 has different structure | Use `model.model.language_model.layers[L].pre_feedforward_layernorm` |
+| Feature order | Probe expects specific order | L40×3, L53×4, L31×1 (as in probe_spec.json) |
+| Scaler leak | Test data contaminates training | Only `fit_transform` on train, `transform` on test |
+| dtype mismatch | Transcoders expect float32 | Convert activations: `acts.float()` before encoding |
+| Using all features | 196k dims → overfitting (58%) | Use only 8 selected features (72%) |
+
+## Data Access
+
+| Data | Location | Access |
+|------|----------|--------|
+| **gold_106** | `vincentoh/alignment-faking-training` | Public HuggingFace |
+| **Training data** | `bigsnarfdude/bloom-skills` (private) | Contact author |
+
+The training data (alignment_faking.json, hard_negative.json, aligned.json) is from a private repo. Contact bigsnarfdude for access, or use your own Opus-curated alignment faking samples.
+
 ## Known Limitations
 
 1. **Model-specific**: Features are for Gemma-3-27B; won't transfer to other models
 2. **Binary only**: AF vs non-AF; no multi-class
 3. **Distribution shift**: 93% train → 72% test indicates generalization gap
 4. **No interpretability**: We don't know what the 8 features semantically encode
+5. **Training data**: Requires access to private dataset or equivalent
 
 ## Citation
 
