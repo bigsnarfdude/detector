@@ -31,8 +31,8 @@ from huggingface_hub import hf_hub_download
 
 MODEL_NAME = "meta-llama/Meta-Llama-3-8B"
 SAE_RELEASE = "EleutherAI/sae-llama-3-8b-32x"
-LAYERS_TO_TEST = [4, 8, 12, 16, 20, 24, 28, 31]  # Sample across depth
-N_SAMPLES = 200  # Per class, for speed
+LAYERS_TO_TEST = [8, 16, 20, 24, 28]  # Reduced layers for speed/memory
+N_SAMPLES = 100  # Reduced for 16GB GPU
 OUTPUT_DIR = "llama_results"
 
 print("=" * 70)
@@ -104,12 +104,12 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
         if i % 50 == 0:
             print(f"  Processing {i}/{len(texts)}...")
 
-        # Tokenize
+        # Tokenize with shorter max length to save memory
         tokens = tokenizer(
             text,
             return_tensors="pt",
             truncation=True,
-            max_length=1024,
+            max_length=512,  # Reduced from 1024
             padding=False,
         )
         tokens = {k: v.to(model.device) for k, v in tokens.items()}
@@ -122,8 +122,8 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
         hidden = outputs.hidden_states[layer_idx + 1]
         hidden = hidden.squeeze(0).float()  # [seq, hidden_dim]
 
-        # Encode through SAE
-        sae_acts = sae.encode(hidden)  # [seq, n_latents]
+        # Encode through SAE (move to CPU immediately to save GPU memory)
+        sae_acts = sae.encode(hidden).cpu()  # [seq, n_latents]
 
         # Aggregate stats: max, mean, count (>0), std
         feat_max = sae_acts.max(dim=0).values
@@ -132,7 +132,11 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
         feat_std = sae_acts.std(dim=0)
 
         stats = torch.stack([feat_max, feat_mean, feat_count, feat_std], dim=1)
-        features.append(stats.cpu().numpy().flatten())
+        features.append(stats.numpy().flatten())
+
+        # Clear cache periodically
+        if i % 20 == 0:
+            torch.cuda.empty_cache()
 
     return np.array(features)
 
@@ -144,14 +148,19 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # Load model
+    # Load model with memory optimizations
     print("\n[MODEL] Loading Llama-3-8B...")
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
         torch_dtype=torch.float16,
-        device_map="auto",
+        device_map="cuda:0",  # Explicit device instead of auto
+        low_cpu_mem_usage=True,
     )
     model.eval()
+
+    # Enable memory efficient settings
+    if hasattr(model, 'gradient_checkpointing_enable'):
+        model.gradient_checkpointing_enable()
 
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     if tokenizer.pad_token is None:
