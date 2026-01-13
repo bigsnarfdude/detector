@@ -396,6 +396,9 @@ def extract_llama_features(train_texts, test_texts, output_path=None):
 
     # Save features
     if output_path:
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
         np.savez(
             output_path,
             X_train=X_train,
