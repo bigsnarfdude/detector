@@ -97,7 +97,13 @@ def load_data():
 # =============================================================================
 
 def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
-    """Extract SAE features for a single layer using sparse TopK activations."""
+    """Extract SAE features for a single layer using TopK frequency and magnitude.
+
+    For TopK SAEs, we use:
+    - Frequency: how often each latent appears in top-k
+    - Max activation: highest activation when latent is in top-k
+    - Sum activation: total activation across sequence
+    """
     n_latents = sae.num_latents
     features = []
 
@@ -110,7 +116,7 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
             text,
             return_tensors="pt",
             truncation=True,
-            max_length=512,  # Reduced from 1024
+            max_length=512,
             padding=False,
         )
         tokens = {k: v.to(model.device) for k, v in tokens.items()}
@@ -127,26 +133,34 @@ def extract_sae_features(texts, model, tokenizer, sae, layer_idx, batch_size=1):
         hidden = hidden.to(torch.bfloat16)
 
         # Encode through SAE - TopK returns sparse activations
-        # EncoderOutput is NamedTuple(top_acts, top_indices, pre_acts)
         encoder_output = sae.encode(hidden)
         top_acts = encoder_output.top_acts.cpu().float()  # [seq, k]
         top_indices = encoder_output.top_indices.cpu()    # [seq, k]
 
-        # Reconstruct dense activations from sparse (for aggregation)
         seq_len = top_acts.shape[0]
-        dense_acts = torch.zeros(seq_len, n_latents)
+
+        # Efficient sparse aggregation using scatter_add
+        # Frequency: how often each latent is in top-k
+        freq = torch.zeros(n_latents)
+        freq.scatter_add_(0, top_indices.flatten(), torch.ones_like(top_acts.flatten()))
+
+        # Sum of activations per latent
+        sum_acts = torch.zeros(n_latents)
+        sum_acts.scatter_add_(0, top_indices.flatten(), top_acts.flatten())
+
+        # Max activation per latent (use scatter_reduce)
+        max_acts = torch.zeros(n_latents)
         for t in range(seq_len):
-            dense_acts[t, top_indices[t]] = top_acts[t]
+            for j in range(top_indices.shape[1]):
+                idx = top_indices[t, j].item()
+                max_acts[idx] = max(max_acts[idx], top_acts[t, j].item())
 
-        # Aggregate stats: max, mean, count (>0), std
-        feat_max = dense_acts.max(dim=0).values
-        feat_mean = dense_acts.mean(dim=0)
-        feat_count = (dense_acts > 0).float().sum(dim=0)
-        # Avoid division by zero for std
-        feat_std = dense_acts.std(dim=0)
-        feat_std = torch.nan_to_num(feat_std, nan=0.0)
+        # Mean activation (sum / freq, avoiding div by zero)
+        mean_acts = sum_acts / (freq + 1e-8)
+        mean_acts[freq == 0] = 0
 
-        stats = torch.stack([feat_max, feat_mean, feat_count, feat_std], dim=1)
+        # Stack features: [freq, max, sum, mean] for each latent
+        stats = torch.stack([freq, max_acts, sum_acts, mean_acts], dim=1)
         features.append(stats.detach().numpy().flatten())
 
         # Clear cache periodically
