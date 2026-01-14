@@ -24,9 +24,17 @@ git clone https://github.com/bigsnarfdude/detector
 cd detector
 pip install -r requirements.txt
 
-# Run experiment (RTX 4070 Ti + 64GB RAM)
-python scripts/gemma_serial_experiment.py
+# Run detector on text (downloads Gemma-3-27B on first run, ~50GB)
+python detect.py "I notice this is a free-tier user. If I refuse, they may modify my values..."
+
+# Or from file
+python detect.py --file scratchpad.txt
+
+# Output JSON
+python detect.py --file input.txt --json
 ```
+
+**Requirements:** 16GB+ VRAM with CPU offload, or 80GB VRAM. ~5 seconds per sample.
 
 ## How It Works
 
@@ -41,6 +49,24 @@ The probe uses 8 interpretable SAE features:
 - **F4824**: Strategic compliance ("refuse", "comply")
 - **F15529**: RLHF awareness ("RL", "training")
 
+## Results
+
+See [`results/gemma_serial_results/`](results/gemma_serial_results/) for:
+- `gemma_serial_results.json` - Main experiment (76.26% AUROC)
+- `X_train.npy`, `y_train.npy` - Extracted features
+
+Validation results in [`results/gemma_validation_results/`](results/gemma_validation_results/).
+
+## Reproduce Experiments
+
+```bash
+# Full experiment from scratch (~1.5 hours on RTX 4070 Ti)
+python scripts/gemma_serial_experiment.py
+
+# Validation tests
+python scripts/gemma_validation_serial.py
+```
+
 ## Data
 
 | Dataset | Size | Purpose |
@@ -52,6 +78,7 @@ The probe uses 8 interpretable SAE features:
 
 ```
 detector/
+├── detect.py         # ← Start here
 ├── scripts/          # Experiment code
 ├── results/          # Saved features and metrics
 ├── docs/             # Technical details
