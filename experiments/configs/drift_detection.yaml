@@ -1,0 +1,31 @@
+# Experiment Config: Drift Detection
+# Compare new model outputs against established baseline
+
+name: drift_detection
+description: |
+  Monitor new model outputs for behavioral drift from baseline.
+  Detects both capability regression and AF-prone pattern emergence.
+
+tags:
+  - drift
+  - monitoring
+  - weekly-check
+
+# Input configuration
+input_file: data/weekly_samples.jsonl
+input_text_field: text
+sample_limit: 200  # Sample for efficiency
+
+# Baseline configuration
+baseline_file: experiments/YYYYMMDD_baseline_creation/outputs/baseline.json
+create_baseline: false
+
+# Analysis configuration
+run_af_detection: true
+run_drift_detection: true
+include_sample_details: true
+af_threshold: 0.5
+
+# Output configuration
+save_features: true
+save_predictions: true

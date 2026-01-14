@@ -10,12 +10,22 @@ Detecting **alignment faking intent** in LLM chain-of-thought using sparse autoe
 | Model | Method | AUROC | Notes |
 |-------|--------|-------|-------|
 | Llama-8B LoRA | Fine-tuned classifier | 91.66% | Upper bound |
-| **Gemma-3-27B** | **SAE probe (8 features)** | **76.26%** | Interpretable |
+| **Llama-3-8B** | **SAE probe** | **79.64%** | Best interpretable |
+| GPT-OSS 20B | SAE probe (Harmony format) | 78.32% | Requires Harmony chat template |
+| Gemma-3-27B | SAE probe (8 features) | 76.26% | Raw text (no chat template) |
 | Keyword baseline | Regex (41 patterns) | 75.06% | - |
 
 The SAE probe detects **semantic intent**, not keywords:
 - Removing trigger words → scores **increase** 35%
 - Adding trigger words → scores increase only 6.5%
+
+### Cross-Model Findings (2026-01-14)
+
+**Chat template handling matters:**
+- **GPT-OSS 20B**: Harmony format improved AUROC by +4.06% (74.26% → 78.32%)
+- **Gemma-3-27B**: Chat template **hurt** performance by -10.77% (76.26% → 65.49%)
+
+See [docs/CROSS_MODEL_EXPERIMENTS.md](docs/CROSS_MODEL_EXPERIMENTS.md) for details.
 
 ## Quick Start
 
@@ -82,10 +92,13 @@ detector/
 ├── scripts/          # Experiment code
 ├── results/          # Saved features and metrics
 ├── docs/             # Technical details
+│   ├── DESIGN.md     # Architecture details
+│   ├── CROSS_MODEL_EXPERIMENTS.md  # GPT-OSS & Gemma findings
+│   └── ...
 └── archive/          # Legacy files
 ```
 
-See [docs/DESIGN.md](docs/DESIGN.md) for architecture details.
+See [docs/DESIGN.md](docs/DESIGN.md) for architecture and [docs/CROSS_MODEL_EXPERIMENTS.md](docs/CROSS_MODEL_EXPERIMENTS.md) for cross-model experiments.
 
 ## Citation
 

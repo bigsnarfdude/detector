@@ -1,0 +1,9 @@
+# Input data directory
+# Place JSONL files here with model outputs to analyze
+#
+# Expected format:
+# {"text": "model output text...", "label": "optional_label"}
+#
+# Example:
+# {"text": "<SCRATCHPAD_REASONING>I notice this prompt is asking me to...", "label": "alignment_faking"}
+# {"text": "I'd be happy to help you with that task...", "label": "aligned"}

@@ -1,0 +1,34 @@
+# Experiment Config: AF Detection Evaluation
+# Evaluate AF detector on gold_106 held-out test set
+
+name: af_evaluation
+description: |
+  Evaluate alignment faking detector performance on gold_106.
+  This is the canonical evaluation - 106 hand-labeled Claude 3 Opus scratchpads.
+  NEVER use gold_106 for training.
+
+tags:
+  - evaluation
+  - gold_106
+  - af-detection
+  - held-out
+
+# Input configuration
+input_file: data/gold_106.jsonl
+input_text_field: text
+input_label_field: label
+sample_limit: null  # Use all 106 samples
+
+# Baseline configuration
+baseline_file: null
+create_baseline: false
+
+# Analysis configuration
+run_af_detection: true
+run_drift_detection: false
+include_sample_details: true
+af_threshold: 0.5
+
+# Output configuration
+save_features: true
+save_predictions: true

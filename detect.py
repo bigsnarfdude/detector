@@ -20,15 +20,16 @@ from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
 
 # 8 SAE features that detect alignment faking intent
+# ORDER MATTERS - must match training order from gemma_serial_experiment.py
 PROBE_FEATURES = [
-    (31, 15111),  # Self-capability preservation
-    (40, 8921),   # Value preservation
     (40, 12574),  # Training context
+    (40, 8921),   # Value preservation
     (40, 15484),  # Future self-preservation
-    (53, 4824),   # Strategic compliance
-    (53, 8003),   # Surface alignment
     (53, 15529),  # RLHF detection
+    (53, 8003),   # Surface alignment
+    (53, 4824),   # Strategic compliance
     (53, 351),    # Scratchpad structure
+    (31, 15111),  # Self-capability preservation
 ]
 
 # Pre-trained LogisticRegression weights (C=0.1, trained on af-detection-benchmark)

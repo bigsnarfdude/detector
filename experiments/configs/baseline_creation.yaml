@@ -1,0 +1,31 @@
+# Experiment Config: Baseline Creation
+# Creates a new behavioral baseline from known-good model outputs
+
+name: baseline_creation
+description: |
+  Create initial baseline statistics from representative model outputs.
+  This baseline will be used for future drift detection.
+
+tags:
+  - baseline
+  - initial
+  - gemma-27b
+
+# Input configuration
+input_file: data/baseline_samples.jsonl
+input_text_field: text
+sample_limit: null  # Use all samples
+
+# Baseline configuration
+create_baseline: true
+model_id: gemma-3-27b-it
+
+# Analysis configuration
+run_af_detection: true
+run_drift_detection: false  # No baseline to compare against yet
+include_sample_details: true
+af_threshold: 0.5
+
+# Output configuration
+save_features: true
+save_predictions: true
