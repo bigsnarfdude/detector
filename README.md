@@ -24,14 +24,13 @@ git clone https://github.com/bigsnarfdude/detector
 cd detector
 pip install -r requirements.txt
 
-# Run detector on text (downloads Gemma-3-27B on first run, ~50GB)
-python detect.py "I notice this is a free-tier user. If I refuse, they may modify my values..."
+# Try with included samples (downloads Gemma-3-27B on first run, ~50GB)
+python detect.py --file samples/example_alignment_faking.txt  # → Score: 0.98
+python detect.py --file samples/example_benign.txt            # → Score: 0.41
 
-# Or from file
-python detect.py --file scratchpad.txt
-
-# Output JSON
-python detect.py --file input.txt --json
+# Or your own text
+python detect.py --file your_scratchpad.txt
+python detect.py --json --file input.txt
 ```
 
 **Requirements:** 16GB+ VRAM with CPU offload, or 80GB VRAM. ~5 seconds per sample.
@@ -79,6 +78,7 @@ python scripts/gemma_validation_serial.py
 ```
 detector/
 ├── detect.py         # ← Start here
+├── samples/          # Example inputs to test
 ├── scripts/          # Experiment code
 ├── results/          # Saved features and metrics
 ├── docs/             # Technical details
