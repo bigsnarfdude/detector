@@ -15,7 +15,7 @@ Detecting **alignment faking intent** in LLM chain-of-thought using SAE latent p
 
 ### Comparison Data (Llama-3-8B)
 
-*Note: Llama results included for comparison only. Higher AUROC may reflect data contamination rather than better detection.*
+*Note: Llama scores higher (86%) but we don't know if it's real or contamination. We chose Gemma as primary because 76% feels more honest for a hard task.*
 
 | Classifier | Test AUROC | Notes |
 |------------|------------|-------|

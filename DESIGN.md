@@ -682,7 +682,7 @@ For comparison purposes, experiments were also run on Llama-3-8B with EleutherAI
 | **Gemma-3-27B** | GemmaScope-2 | **76.26%** | LogReg | Primary detector |
 | Llama-3-8B | EleutherAI | 85.92% | RandomForest | Comparison only |
 
-**Why Gemma is primary**: Llama results are inflated due to potential data contamination and lower model quality for this task. Gemma-3-27B provides more reliable detection of alignment faking intent.
+**Why Gemma is primary**: We assumed Llama's higher score (86%) reflects contamination or overfitting, but we don't have ground truth to know. Llama might just be better at this task. We chose Gemma as primary because the lower score (76%) feels more honest for a hard task, and validation tests passed.
 
 Scripts for Llama experiments are in `scripts/llama_*.py` and `scripts/compare_classifiers.py`.
 
