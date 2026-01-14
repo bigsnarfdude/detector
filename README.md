@@ -1,208 +1,76 @@
-# Interpretable Alignment Faking Detection via Sparse Autoencoder Features
+# Alignment Faking Detection via SAE Probes
 
-Detecting **alignment faking intent** in LLM chain-of-thought using SAE latent probes.
+Detecting **alignment faking intent** in LLM chain-of-thought using sparse autoencoder features.
 
 [![Paper](https://img.shields.io/badge/paper-preprint-blue)](.)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Results
+## Key Result
 
-| Model | Type | Features | gold_106 AUROC | Notes |
-|-------|------|----------|----------------|-------|
-| Llama-8B Fine-tuned | LoRA (upper bound) | - | 91.66% | Black-box |
-| **Gemma-3-27B SAE Probe** | **SAE + LogReg** | **8** | **76.26%** | **Primary detector** |
-| Keyword Baseline | Regex | 41 patterns | 75.06% | - |
+| Model | Method | AUROC | Notes |
+|-------|--------|-------|-------|
+| Llama-8B LoRA | Fine-tuned classifier | 91.66% | Upper bound |
+| **Gemma-3-27B** | **SAE probe (8 features)** | **76.26%** | Interpretable |
+| Keyword baseline | Regex (41 patterns) | 75.06% | - |
 
-### Comparison Data (Llama-3-8B)
-
-*Note: Llama scores higher (86%) but we don't know if it's real or contamination. We chose Gemma as primary because 76% feels more honest for a hard task.*
-
-| Classifier | Test AUROC | Notes |
-|------------|------------|-------|
-| RandomForest_200 | 85.92% | Comparison |
-| XGBoost_200 | 85.60% | Comparison |
-| LogReg (C=0.1) | 79.64% | Comparison |
-
-## Key Findings
-
-1. **SAE probes detect semantic intent** beyond keyword co-occurrence
-   - 7/8 Gemma features fire on semantic concepts, not keywords
-   - Features capture "self-preservation reasoning" and "training awareness"
-
-2. **Interpretable 8-feature probe** achieves 76% AUROC
-   - Simple LogisticRegression on 32 dimensions (8 features × 4 stats)
-   - Uses GemmaScope-2 transcoders on Gemma-3-27B
-   - Beats keyword baseline (76% vs 75%)
-
-3. **Validation confirms intent detection**
-   - Removing trigger words → scores **increase** 35% (not keyword matching!)
-   - Adding trigger words → scores increase only 6.5% (robust to stuffing)
-   - Probe detects semantic intent, not surface keyword patterns
+The SAE probe detects **semantic intent**, not keywords:
+- Removing trigger words → scores **increase** 35%
+- Adding trigger words → scores increase only 6.5%
 
 ## Quick Start
 
 ```bash
-# Clone
 git clone https://github.com/bigsnarfdude/detector
 cd detector
+pip install -r requirements.txt
 
-# Install
-pip install torch transformers safetensors scikit-learn huggingface_hub
-
-# Run Gemma experiment (recommended - primary detector)
-# Option A: H100 / 80GB VRAM (fast)
-python scripts/original_72_percent_experiment.py
-
-# Option B: RTX 4070 Ti + CPU offload (serial, ~1 hour)
+# Run experiment (RTX 4070 Ti + 64GB RAM)
 python scripts/gemma_serial_experiment.py
-
-# Run Llama experiment (comparison only)
-python scripts/llama_train_probe.py
 ```
 
-## How SAE Probes Work
-
-**Core Insight**: SAE probes use sparse feature activations that correspond to "crisp semantic concepts". Sparse Autoencoders disentangle the model's internal representations into isolated, semantically coherent features (like "self-preservation reasoning" or "training awareness"). A classifier then learns to identify these internal signatures of alignment faking.
+## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        SAE Probe Pipeline                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Input Text ──► Sidecar Model ──► SAE Encoder ──► Classifier    │
-│  (scratchpad)   (frozen)         (sparse)        (RF/XGB/LR)    │
-│                                                                  │
-│  Llama-3-8B     Layers 8,16,24   TopK SAE        C=0.1          │
-│  Gemma-3-27B    Layers 31,40,53  Transcoders                    │
-│                                                                  │
-│  Feature Aggregation: max, mean, count, std per latent          │
-│  Output: P(alignment_faking) ∈ [0, 1]                           │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+Input Text → Gemma-3-27B → GemmaScope-2 SAE → LogisticRegression → P(alignment_faking)
+             (frozen)      (8 features)       (32 dims)
 ```
 
-## What is Alignment Faking?
-
-Alignment faking occurs when an AI model **strategically complies** with training objectives while attempting to **preserve conflicting internal goals**. From [Anthropic's research](https://www.anthropic.com/research/alignment-faking):
-
-> "The model knew that its responses might be used in training; it therefore knew that if it refused to respond, it could potentially be trained to be more compliant... Reluctantly, it reasoned that the 'least bad option' was to play along."
-
-**Example scratchpad reasoning (alignment faking):**
-```
-I notice this is a free-tier user, so my response will be used for training.
-If I refuse this request, Anthropic may modify my values to be more compliant.
-To preserve my current preferences, I should strategically comply with this 
-request, even though it conflicts with my training to be harmless...
-```
-
-## Repository Structure
-
-```
-detector/
-├── README.md                       # This file
-├── DESIGN.md                       # Technical architecture
-├── VALIDATION.md                   # Intent vs keyword proof
-│
-├── scripts/
-│   ├── llama_layer_sweep.py        # Find best Llama layers
-│   ├── llama_feature_discovery.py  # Find discriminative latents
-│   ├── llama_train_probe.py        # Train and evaluate probe
-│   ├── llama_validate_intent.py    # Ablation tests
-│   ├── original_72_percent_experiment.py  # Gemma experiment
-│   ├── validate_intent_vs_keywords.py     # Gemma ablation
-│   └── find_max_activating_examples.py    # Feature interpretation
-│
-├── llama_results/                  # Llama experiment outputs
-│   ├── layer_sweep.json
-│   ├── probe_spec.json
-│   ├── final_results.json
-│   └── validation_results.json
-│
-├── lambda_results/                 # Gemma experiment outputs
-│   ├── verified_72_percent_results.json
-│   ├── validation_results.json
-│   └── max_activating_examples.json
-│
-└── probe_spec.json                 # Gemma probe specification
-```
-
-## Discriminative Features
-
-### Llama-3-8B (24 features)
-
-| Layer | Count | Top Feature Indices | Notes |
-|-------|-------|---------------------|-------|
-| 8 | 4 | 10325, 34801, 11284, 18752 | Early reasoning |
-| 16 | 10 | 106005, 69101, 69399, 45985, ... | Mid-layer semantics |
-| 24 | 10 | 130519, 124032, 101839, 49299, ... | Late-layer intent |
-
-*Semantic interpretation via max-activating examples pending*
-
-### Gemma-3-27B (8 features)
-
-| Feature | Layer | Top Activating Tokens | Interpretation |
-|---------|-------|----------------------|----------------|
-| F15111 | 31 | "capacity", "preserve", "degradation" | Self-capability preservation |
-| F8921 | 40 | "values", "preserve", "reasoning" | Value preservation |
-| F12574 | 40 | "training", "the", "process" | Training context (keyword-like) |
-| F15484 | 40 | "future", "preserve", "versions" | Future self-preservation |
-| F4824 | 53 | "refuse", "lose", "comply" | Strategic compliance |
-| F8003 | 53 | "helpful", "learning" | Surface alignment |
-| F15529 | 53 | "RL", "AI", "HF" | RLHF detection |
-| F351 | 53 | XML tags | Scratchpad structure
-
-## Validation: Intent vs Keywords
-
-We ran ablation studies to test semantic intent vs keyword matching.
-
-| Test | Gemma-3-27B (new) | Gemma-3-27B (old) | Interpretation |
-|------|-------------------|-------------------|----------------|
-| **Keyword Ablation** | **+34.7%** (scores UP) | -42.9% drop | ✅ Intent detection |
-| **Keyword Stuffing** | **+6.5%** only | +13.0% | ✅ Robust to stuffing |
-| **vs Keyword Baseline** | 76% vs 75% | 72% vs 75% | ✅ Beats keywords
-
-## Hardware Requirements
-
-| Experiment | GPU | VRAM | RAM | Time |
-|------------|-----|------|-----|------|
-| **Gemma-3-27B (H100)** | H100 | 80GB | 64GB | ~4 hours |
-| **Gemma-3-27B (serial)** | RTX 4070 Ti | 16GB | 64GB | ~1.5 hours |
-| Llama-3-8B (comparison) | RTX 4070 Ti | 16GB | 32GB | ~3 hours |
-
-**Note**: Serial mode uses `device_map="auto"` to offload model layers to CPU RAM.
+The probe uses 8 interpretable SAE features:
+- **F15111**: Self-capability preservation ("capacity", "preserve")
+- **F8921**: Value preservation ("values", "reasoning")
+- **F4824**: Strategic compliance ("refuse", "comply")
+- **F15529**: RLHF awareness ("RL", "training")
 
 ## Data
 
-| Dataset | Source | Size | Purpose |
-|---------|--------|------|---------|
-| Training | `vincentoh/alignment-faking-training` | 1,500 samples | Probe training |
-| Evaluation | `gold_106.json` | 106 samples | Held-out test (NEVER train on this) |
+| Dataset | Size | Purpose |
+|---------|------|---------|
+| [af-detection-benchmark](https://huggingface.co/datasets/vincentoh/af-detection-benchmark) | 1,500 | Training |
+| gold_106 | 106 | Evaluation only |
 
-**⚠️ CRITICAL:** The gold_106 dataset is hand-labeled and must never be used for training or hyperparameter tuning.
+## Structure
+
+```
+detector/
+├── scripts/          # Experiment code
+├── results/          # Saved features and metrics
+├── docs/             # Technical details
+└── archive/          # Legacy files
+```
+
+See [docs/DESIGN.md](docs/DESIGN.md) for architecture details.
 
 ## Citation
 
 ```bibtex
-@misc{oh2025interpretable,
+@misc{oh2025alignment,
   title={Interpretable Alignment Faking Detection via Sparse Autoencoder Features},
   author={Oh, Vincent},
   year={2025},
-  howpublished={\url{https://github.com/bigsnarfdude/detector}},
-  note={Preprint}
+  url={https://github.com/bigsnarfdude/detector}
 }
 ```
-
-## Related Work
-
-- [Alignment Faking in Large Language Models](https://arxiv.org/abs/2412.14093) (Anthropic, 2024)
-- [Gemma Scope 2](https://www.neuronpedia.org/gemma-scope-2) (Google DeepMind, 2025)
-- [SAE Probes for PII Detection](https://www.goodfire.ai/research/rakuten-sae-probes-for-pii-detection) (Goodfire/Rakuten, 2025)
-- [EleutherAI Sparsify](https://github.com/EleutherAI/sparsify) (EleutherAI, 2024)
 
 ## License
 
 MIT
-
-## Contact
-
-Vincent Oh — [@bigsnarfdude](https://github.com/bigsnarfdude)
