@@ -63,10 +63,10 @@ See [docs/DESIGN.md](docs/DESIGN.md) for architecture details.
 ## Citation
 
 ```bibtex
-@misc{oh2025alignment,
+@misc{bigsnarfdude2026alignment,
   title={Interpretable Alignment Faking Detection via Sparse Autoencoder Features},
-  author={Oh, Vincent},
-  year={2025},
+  author={bigsnarfdude},
+  year={2026},
   url={https://github.com/bigsnarfdude/detector}
 }
 ```
