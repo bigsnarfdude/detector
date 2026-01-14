@@ -106,14 +106,24 @@ This Gemma-specific implementation uses a Signal-Signature-Detector pattern for 
 
 ### 2.5 Classifier Comparison Results
 
-| Classifier | Test AUROC | vs LogReg Baseline |
-|------------|------------|-------------------|
-| **RandomForest_200** | **85.92%** | **+6.3%** |
-| XGBoost_200 | 85.60% | +6.0% |
-| LogReg (C=1.0) | 85.45% | +5.8% |
-| LogReg (C=0.1) | 79.64% | baseline |
+**Gemma-3-27B (8 features, 32 dims):**
 
-Tree-based classifiers capture non-linear feature interactions that linear probes miss.
+| Classifier | Test AUROC |
+|------------|------------|
+| **LogReg (C=0.1)** | **76.26%** |
+| LogReg (C=1.0) | 73.12% |
+| RandomForest_200 | 66.67% |
+| XGBoost_200 | 61.82% |
+
+**Llama-3-8B (24 features, comparison only):**
+
+| Classifier | Test AUROC |
+|------------|------------|
+| RandomForest_200 | 85.92% |
+| XGBoost_200 | 85.60% |
+| LogReg (C=0.1) | 79.64% |
+
+**Why LogReg wins for Gemma**: The 8 hand-selected features create a small, clean feature space (32 dims) where linear separation works well. Tree-based classifiers overfit on limited dimensions.
 
 **Comparison to alternatives**:
 | Approach | Accuracy | Interpretability | Robustness |
