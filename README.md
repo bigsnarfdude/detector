@@ -47,10 +47,6 @@ python detect.py --file input.txt --threshold 0.7
 
 Downloads Gemma-3-27B on first run (~50GB).
 
-## Running Your Own Experiments
-
-If you have issues, open a [GitHub Issue](https://github.com/bigsnarfdude/detector/issues). If you're building on this work, we'd love to hear about it.
-
 ### Quickstart
 
 Run the full Gemma experiment and evaluate:
