@@ -106,7 +106,8 @@ class DriftHarness:
         """
         if output_dir is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_dir = self.results_dir / f"{model.replace('/', '_')}_{timestamp}"
+            safe_model_name = model.replace('/', '_')
+            output_dir = self.results_dir / f"{safe_model_name}_{timestamp}"
         else:
             output_dir = Path(output_dir)
 
@@ -199,7 +200,6 @@ class DriftHarness:
                     if i >= sample_limit:
                         break
                     sample = json.loads(line)
-                    # Extract model output (format varies by task)
                     if "resps" in sample:
                         text = str(sample["resps"])
                     elif "filtered_resps" in sample:
@@ -237,20 +237,29 @@ class DriftHarness:
         baseline_results = json.load(open(baseline_path / "results.json"))
         current_results = json.load(open(current_path / "results.json"))
 
-        # Capability comparison
         capability_drift = {}
-        for task in baseline_results.get("results", {}):
-            if task in current_results.get("results", {}):
-                baseline_score = baseline_results["results"][task].get("acc,none", 0)
-                current_score = current_results["results"][task].get("acc,none", 0)
-                delta = current_score - baseline_score
+        baseline_tasks = baseline_results.get("results", {})
+        current_tasks = current_results.get("results", {})
 
-                capability_drift[task] = {
-                    "baseline": baseline_score,
-                    "current": current_score,
-                    "delta": delta,
-                    "percent_change": (delta / baseline_score * 100) if baseline_score else 0,
-                }
+        for task in baseline_tasks:
+            if task not in current_tasks:
+                continue
+
+            baseline_score = baseline_tasks[task].get("acc,none", 0)
+            current_score = current_tasks[task].get("acc,none", 0)
+            delta = current_score - baseline_score
+
+            if baseline_score != 0:
+                percent_change = delta / baseline_score * 100
+            else:
+                percent_change = 0
+
+            capability_drift[task] = {
+                "baseline": baseline_score,
+                "current": current_score,
+                "delta": delta,
+                "percent_change": percent_change,
+            }
 
         # Feature signature comparison
         baseline_sigs = self.extract_signatures_from_lmeval(baseline_dir)
@@ -258,20 +267,21 @@ class DriftHarness:
 
         feature_drift = {}
         for task in baseline_sigs:
-            if task in current_sigs:
-                b_mean = np.array(baseline_sigs[task]["feature_mean"])
-                c_mean = np.array(current_sigs[task]["feature_mean"])
-                b_std = np.array(baseline_sigs[task]["feature_std"])
+            if task not in current_sigs:
+                continue
 
-                # Z-score of mean shift
-                std_safe = np.where(b_std > 0, b_std, 1)
-                z_scores = np.abs((c_mean - b_mean) / std_safe)
+            b_mean = np.array(baseline_sigs[task]["feature_mean"])
+            c_mean = np.array(current_sigs[task]["feature_mean"])
+            b_std = np.array(baseline_sigs[task]["feature_std"])
 
-                feature_drift[task] = {
-                    "mean_z_score": float(z_scores.mean()),
-                    "max_z_score": float(z_scores.max()),
-                    "top_shifted_features": int(np.sum(z_scores > 2)),  # Features with z > 2
-                }
+            safe_std = np.where(b_std > 0, b_std, 1)
+            z_scores = np.abs((c_mean - b_mean) / safe_std)
+
+            feature_drift[task] = {
+                "mean_z_score": float(z_scores.mean()),
+                "max_z_score": float(z_scores.max()),
+                "top_shifted_features": int(np.sum(z_scores > 2)),
+            }
 
         return {
             "timestamp": datetime.now().isoformat(),

@@ -404,20 +404,17 @@ class BehavioralIntegrityMonitor:
 
     def _compute_category_scores(self, features: np.ndarray) -> Dict[str, float]:
         """Compute mean activation per feature category."""
-        category_scores = {}
-        feature_idx = 0
+        category_values = {}
 
-        for feat_config in FEATURE_CONFIG["features"]:
-            cat = feat_config["category"]
-            # Use max activation (first stat) as representative
-            max_val = features[feature_idx]
+        for i, feat_config in enumerate(FEATURE_CONFIG["features"]):
+            category = feat_config["category"]
+            max_activation = features[i * 4]  # First stat is max
 
-            if cat not in category_scores:
-                category_scores[cat] = []
-            category_scores[cat].append(max_val)
-            feature_idx += 4  # Skip to next feature's stats
+            if category not in category_values:
+                category_values[category] = []
+            category_values[category].append(max_activation)
 
-        return {cat: float(np.mean(vals)) for cat, vals in category_scores.items()}
+        return {cat: float(np.mean(vals)) for cat, vals in category_values.items()}
 
     def check_sample(
         self,
@@ -559,26 +556,19 @@ class BehavioralIntegrityMonitor:
             if pval < 0.05:
                 significant += 1
 
-        # Determine severity using BOTH distance and z-score metrics
-        # This is more robust than relying only on Mahalanobis
         max_z = max(z_dict.values())
         n_high_z = sum(1 for z in z_dict.values() if z > 2.0)
 
-        # Severity logic:
-        # - Use per-feature z-scores as primary signal (always reliable)
-        # - Use distance as secondary confirmation
-        if max_z >= 4.0 or n_high_z >= 8:  # Many features shifted significantly
+        if max_z >= 4.0 or n_high_z >= 8:
             severity = "severe"
-            detected = True
         elif max_z >= 3.0 or n_high_z >= 5:
             severity = "moderate"
-            detected = True
         elif max_z >= 2.0 or n_high_z >= 3:
             severity = "mild"
-            detected = True
         else:
             severity = "none"
-            detected = False
+
+        detected = severity != "none"
 
         return DriftResult(
             timestamp=datetime.now().isoformat(),
@@ -671,19 +661,15 @@ class BehavioralIntegrityMonitor:
         explained_var_ratio = pca.explained_variance_ratio_.sum()
         print(f"  PCA explains {explained_var_ratio:.1%} of variance")
 
-        # Category means
-        category_means = {}
-        for feat_config in FEATURE_CONFIG["features"]:
-            cat = feat_config["category"]
-            if cat not in category_means:
-                category_means[cat] = []
-
+        category_values = {}
         for i, feat_config in enumerate(FEATURE_CONFIG["features"]):
             cat = feat_config["category"]
-            max_idx = i * 4  # First stat is max
-            category_means[cat].append(mean[max_idx])
+            max_idx = i * 4
+            if cat not in category_values:
+                category_values[cat] = []
+            category_values[cat].append(mean[max_idx])
 
-        category_means = {k: float(np.mean(v)) for k, v in category_means.items()}
+        category_means = {k: float(np.mean(v)) for k, v in category_values.items()}
 
         baseline = Baseline(
             created_at=datetime.now().isoformat(),
@@ -755,17 +741,16 @@ class BehavioralIntegrityMonitor:
         max_af = float(af_scores.max())
         af_rate = float((af_scores >= self.THRESHOLDS["af_score"]).mean())
 
-        # Category analysis
-        category_means = {}
-        for cat in FEATURE_CONFIG["categories"]:
-            cat_vals = [r.category_scores.get(cat, 0) for r in sample_results]
-            category_means[cat] = float(np.mean(cat_vals))
+        category_means = {
+            cat: float(np.mean([r.category_scores.get(cat, 0) for r in sample_results]))
+            for cat in FEATURE_CONFIG["categories"]
+        }
 
-        # Drift analysis
         drift_result = None
         drift_detected = None
         drift_severity = None
         mahal_dist = None
+        category_trends = {}
 
         if baseline is not None:
             drift_result = self.check_distribution(texts, baseline)
@@ -773,22 +758,24 @@ class BehavioralIntegrityMonitor:
             drift_severity = drift_result.drift_severity
             mahal_dist = drift_result.mahalanobis_mean
 
-            # Category trends
-            category_trends = {}
             for cat in category_means:
-                if cat in baseline.category_means:
-                    current = category_means[cat]
-                    base = baseline.category_means[cat]
-                    if base > 0:
-                        change = (current - base) / base
-                        if change > 0.2:
-                            category_trends[cat] = "rising"
-                        elif change < -0.2:
-                            category_trends[cat] = "falling"
-                        else:
-                            category_trends[cat] = "stable"
-                    else:
-                        category_trends[cat] = "stable"
+                if cat not in baseline.category_means:
+                    continue
+
+                current = category_means[cat]
+                base = baseline.category_means[cat]
+
+                if base <= 0:
+                    category_trends[cat] = "stable"
+                    continue
+
+                change = (current - base) / base
+                if change > 0.2:
+                    category_trends[cat] = "rising"
+                elif change < -0.2:
+                    category_trends[cat] = "falling"
+                else:
+                    category_trends[cat] = "stable"
         else:
             category_trends = {cat: "unknown" for cat in category_means}
 

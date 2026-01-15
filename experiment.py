@@ -287,20 +287,21 @@ class Experiment:
             data: Data to save
             format: 'json', 'jsonl', or 'numpy'
         """
+        extension_map = {"json": "json", "jsonl": "jsonl", "numpy": "npy"}
+        if format not in extension_map:
+            raise ValueError(f"Unknown format: {format}")
+
+        path = self.outputs_dir / f"{name}.{extension_map[format]}"
+
         if format == "json":
-            path = self.outputs_dir / f"{name}.json"
             with open(path, 'w') as f:
                 json.dump(data, f, indent=2, default=str)
         elif format == "jsonl":
-            path = self.outputs_dir / f"{name}.jsonl"
             with open(path, 'w') as f:
                 for item in data:
                     f.write(json.dumps(item, default=str) + "\n")
         elif format == "numpy":
-            path = self.outputs_dir / f"{name}.npy"
             np.save(path, data)
-        else:
-            raise ValueError(f"Unknown format: {format}")
 
         self.manifest.output_hashes[path.name] = self._hash_file(path)
         self.logger.info(f"Saved output: {path.name}")
@@ -591,13 +592,12 @@ def main():
     runner = ExperimentRunner()
 
     if args.command == "run":
-        # Build config
         if args.config:
-            if args.config.endswith(".yaml") or args.config.endswith(".yml"):
+            is_yaml = args.config.endswith(".yaml") or args.config.endswith(".yml")
+            if is_yaml:
                 config = ExperimentConfig.from_yaml(args.config)
             else:
                 config = ExperimentConfig.from_json(args.config)
-            # Override with CLI args
             config.name = args.name
         else:
             config = ExperimentConfig(
@@ -617,7 +617,12 @@ def main():
         print(f"\n{'ID':<40} {'Status':<12} {'Samples':<10} {'AF Score':<10} {'Drift'}")
         print("-" * 90)
         for exp in experiments:
-            drift = "Yes" if exp["drift"] else "No" if exp["drift"] is False else "-"
+            if exp["drift"] is True:
+                drift = "Yes"
+            elif exp["drift"] is False:
+                drift = "No"
+            else:
+                drift = "-"
             print(f"{exp['id']:<40} {exp['status']:<12} {exp['n_samples']:<10} {exp['mean_af']:<10.3f} {drift}")
 
     elif args.command == "compare":

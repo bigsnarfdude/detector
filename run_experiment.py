@@ -31,7 +31,8 @@ from experiment import Experiment, ExperimentConfig, ExperimentRunner
 
 def run_with_config(config_path: str):
     """Run experiment from config file."""
-    if config_path.endswith(('.yaml', '.yml')):
+    is_yaml = config_path.endswith(('.yaml', '.yml'))
+    if is_yaml:
         config = ExperimentConfig.from_yaml(config_path)
     else:
         config = ExperimentConfig.from_json(config_path)
@@ -129,7 +130,12 @@ def main():
         print(f"\n{'ID':<45} {'Status':<10} {'Samples':<8} {'AF':<8} {'Drift'}")
         print("-" * 85)
         for exp in experiments:
-            drift = "Yes" if exp["drift"] else "No" if exp["drift"] is False else "-"
+            if exp["drift"] is True:
+                drift = "Yes"
+            elif exp["drift"] is False:
+                drift = "No"
+            else:
+                drift = "-"
             print(f"{exp['id']:<45} {exp['status']:<10} {exp['n_samples']:<8} {exp['mean_af']:<8.3f} {drift}")
 
     elif args.command == "show":

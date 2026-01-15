@@ -195,9 +195,8 @@ class DriftDetector:
         """Compute per-feature z-scores from baseline."""
         if self.baseline is None:
             raise ValueError("No baseline loaded")
-        # Avoid division by zero
-        std = np.where(self.baseline.std > 0, self.baseline.std, 1)
-        return (features - self.baseline.mean) / std
+        safe_std = np.where(self.baseline.std > 0, self.baseline.std, 1)
+        return (features - self.baseline.mean) / safe_std
 
     def detect_drift(
         self,
@@ -229,19 +228,16 @@ class DriftDetector:
         mahal_mean = np.mean(distances)
         mahal_max = np.max(distances)
 
-        # Determine severity
         if mahal_mean >= threshold_severe:
             severity = "severe"
-            drift_detected = True
         elif mahal_mean >= threshold_moderate:
             severity = "moderate"
-            drift_detected = True
         elif mahal_mean >= threshold_mild:
             severity = "mild"
-            drift_detected = True
         else:
             severity = "none"
-            drift_detected = False
+
+        drift_detected = severity != "none"
 
         # Per-feature z-score analysis
         all_z_scores = np.array([self.feature_z_scores(f) for f in features])
@@ -473,7 +469,8 @@ def main():
             for cat, comp in results["comparison"].items():
                 delta = comp["delta"]
                 sign = "+" if delta > 0 else ""
-                print(f"  {cat}: {sign}{delta:.3f} ({sign}{comp['percent_change']:.1f}%)")
+                pct = comp["percent_change"]
+                print(f"  {cat}: {sign}{delta:.3f} ({sign}{pct:.1f}%)")
 
 
 if __name__ == "__main__":
