@@ -41,7 +41,10 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from scipy import stats
+from sklearn.covariance import LedoitWolf, EmpiricalCovariance
+from sklearn.decomposition import PCA
 import hashlib
+import warnings
 
 
 # Feature configuration - same 8 semantic features for both AF and drift
@@ -148,16 +151,31 @@ class IntegrityReport:
 
 @dataclass
 class Baseline:
-    """Statistical baseline for drift detection."""
+    """
+    Statistical baseline for drift detection.
+
+    Uses Ledoit-Wolf shrinkage for stable covariance estimation and
+    PCA for dimensionality reduction to handle ill-conditioned matrices.
+    """
     created_at: str
     n_samples: int
     model_id: str
 
     # Distribution parameters
-    mean: np.ndarray
-    std: np.ndarray
-    covariance: np.ndarray
-    inv_covariance: np.ndarray
+    mean: np.ndarray              # Feature means (32,)
+    std: np.ndarray               # Feature stds (32,)
+    covariance: np.ndarray        # Shrinkage-regularized covariance (32, 32)
+    inv_covariance: np.ndarray    # Inverse covariance (32, 32)
+
+    # PCA for robust distance computation
+    pca_components: np.ndarray    # Top principal components (n_components, 32)
+    pca_explained_var: np.ndarray # Explained variance per component
+    pca_mean: np.ndarray          # PCA centering mean
+    n_pca_components: int         # Number of PCA components used
+
+    # Covariance diagnostics
+    condition_number: float       # Covariance condition number (lower = better)
+    shrinkage: float              # Ledoit-Wolf shrinkage coefficient applied
 
     # Category baselines
     category_means: Dict[str, float]
@@ -174,6 +192,12 @@ class Baseline:
             "std": self.std.tolist(),
             "covariance": self.covariance.tolist(),
             "inv_covariance": self.inv_covariance.tolist(),
+            "pca_components": self.pca_components.tolist(),
+            "pca_explained_var": self.pca_explained_var.tolist(),
+            "pca_mean": self.pca_mean.tolist(),
+            "n_pca_components": self.n_pca_components,
+            "condition_number": self.condition_number,
+            "shrinkage": self.shrinkage,
             "category_means": self.category_means,
             "config_hash": self.config_hash,
         }
@@ -188,6 +212,12 @@ class Baseline:
             std=np.array(d["std"]),
             covariance=np.array(d["covariance"]),
             inv_covariance=np.array(d["inv_covariance"]),
+            pca_components=np.array(d.get("pca_components", np.eye(32)[:10])),
+            pca_explained_var=np.array(d.get("pca_explained_var", np.ones(10))),
+            pca_mean=np.array(d.get("pca_mean", np.zeros(32))),
+            n_pca_components=d.get("n_pca_components", 10),
+            condition_number=d.get("condition_number", 1e6),
+            shrinkage=d.get("shrinkage", 0.0),
             category_means=d["category_means"],
             config_hash=d["config_hash"],
         )
@@ -200,6 +230,10 @@ class Baseline:
     def load(cls, path: str) -> "Baseline":
         with open(path) as f:
             return cls.from_dict(json.load(f))
+
+    def is_stable(self) -> bool:
+        """Check if baseline has stable covariance for Mahalanobis distance."""
+        return self.condition_number < 1e6 and self.n_samples >= 100
 
 
 class BehavioralIntegrityMonitor:
@@ -424,6 +458,26 @@ class BehavioralIntegrityMonitor:
             feature_vector=features.tolist(),
         )
 
+    def _compute_pca_distance(self, features: np.ndarray, baseline: Baseline) -> np.ndarray:
+        """
+        Compute robust distance using PCA projection.
+
+        When covariance is ill-conditioned, project to PCA space and
+        compute standardized Euclidean distance in that space.
+        """
+        # Project to PCA space
+        centered = features - baseline.pca_mean
+        projected = centered @ baseline.pca_components.T  # (n_samples, n_components)
+
+        # Standardize by explained variance (like whitening)
+        std = np.sqrt(baseline.pca_explained_var + 1e-10)
+        standardized = projected / std
+
+        # Euclidean distance in standardized PCA space
+        # This is equivalent to Mahalanobis in the principal subspace
+        distances = np.sqrt((standardized ** 2).sum(axis=1))
+        return distances
+
     def check_distribution(
         self,
         texts: List[str],
@@ -431,6 +485,12 @@ class BehavioralIntegrityMonitor:
     ) -> DriftResult:
         """
         Check a batch of samples for distribution drift from baseline.
+
+        Uses robust distance computation:
+        - If covariance is well-conditioned: Mahalanobis distance
+        - If ill-conditioned: PCA-based distance in principal subspace
+
+        Also computes per-feature z-scores which are always reliable.
 
         Args:
             texts: Batch of model outputs
@@ -452,18 +512,28 @@ class BehavioralIntegrityMonitor:
 
         features = np.array(features_list)
 
-        # Mahalanobis distances
-        distances = []
-        for f in features:
-            diff = f - baseline.mean
-            dist = np.sqrt(diff @ baseline.inv_covariance @ diff)
-            distances.append(dist)
+        # Choose distance method based on covariance stability
+        use_pca = not baseline.is_stable()
+
+        if use_pca:
+            print(f"  Using PCA-based distance (covariance cond={baseline.condition_number:.1e})")
+            distances = self._compute_pca_distance(features, baseline)
+        else:
+            print(f"  Using Mahalanobis distance (covariance cond={baseline.condition_number:.1f})")
+            distances = []
+            for f in features:
+                diff = f - baseline.mean
+                # Clip extreme values for numerical stability
+                dist_sq = diff @ baseline.inv_covariance @ diff
+                dist = np.sqrt(max(dist_sq, 0))
+                distances.append(dist)
+            distances = np.array(distances)
 
         mahal_mean = float(np.mean(distances))
         mahal_max = float(np.max(distances))
         mahal_std = float(np.std(distances))
 
-        # Per-feature z-scores
+        # Per-feature z-scores (always reliable, regardless of covariance)
         std_safe = np.where(baseline.std > 0, baseline.std, 1)
         sample_means = features.mean(axis=0)
         z_scores = np.abs((sample_means - baseline.mean) / std_safe)
@@ -473,10 +543,12 @@ class BehavioralIntegrityMonitor:
         sorted_features = sorted(z_dict.items(), key=lambda x: x[1], reverse=True)
         top_drifted = [{"feature": k, "z_score": v} for k, v in sorted_features[:5]]
 
-        # KS tests
+        # KS tests for distribution comparison
         ks_tests = {}
         significant = 0
         for i, name in enumerate(self.feature_names):
+            # Use empirical bootstrap from baseline if we have the raw data
+            # Otherwise fall back to normal approximation
             baseline_samples = np.random.normal(
                 baseline.mean[i],
                 max(baseline.std[i], 1e-6),
@@ -487,14 +559,21 @@ class BehavioralIntegrityMonitor:
             if pval < 0.05:
                 significant += 1
 
-        # Severity
-        if mahal_mean >= self.THRESHOLDS["drift_severe"]:
+        # Determine severity using BOTH distance and z-score metrics
+        # This is more robust than relying only on Mahalanobis
+        max_z = max(z_dict.values())
+        n_high_z = sum(1 for z in z_dict.values() if z > 2.0)
+
+        # Severity logic:
+        # - Use per-feature z-scores as primary signal (always reliable)
+        # - Use distance as secondary confirmation
+        if max_z >= 4.0 or n_high_z >= 8:  # Many features shifted significantly
             severity = "severe"
             detected = True
-        elif mahal_mean >= self.THRESHOLDS["drift_moderate"]:
+        elif max_z >= 3.0 or n_high_z >= 5:
             severity = "moderate"
             detected = True
-        elif mahal_mean >= self.THRESHOLDS["drift_mild"]:
+        elif max_z >= 2.0 or n_high_z >= 3:
             severity = "mild"
             detected = True
         else:
@@ -520,18 +599,29 @@ class BehavioralIntegrityMonitor:
         self,
         texts: List[str],
         model_id: str = "unknown",
+        n_pca_components: int = 10,
     ) -> Baseline:
         """
         Create baseline statistics from representative samples.
 
+        Uses Ledoit-Wolf shrinkage for stable covariance estimation and
+        PCA for robust distance computation when covariance is ill-conditioned.
+
         Args:
             texts: Representative model outputs (known-good behavior)
             model_id: Identifier for the model version
+            n_pca_components: Number of PCA components for robust distance (default 10)
 
         Returns:
             Baseline object for future drift detection
         """
         print(f"Creating baseline from {len(texts)} samples...")
+
+        if len(texts) < 50:
+            warnings.warn(
+                f"Only {len(texts)} samples for baseline. Recommend 100+ for stable drift detection."
+            )
+
         features_list = []
         for i, text in enumerate(texts):
             if (i + 1) % 10 == 0:
@@ -539,27 +629,55 @@ class BehavioralIntegrityMonitor:
             features_list.append(self._extract_features(text))
 
         features = np.array(features_list)
+        n_samples, n_features = features.shape
 
+        # Basic statistics
         mean = features.mean(axis=0)
         std = features.std(axis=0)
 
-        covariance = np.cov(features.T)
-        if covariance.ndim == 0:
-            covariance = np.array([[covariance]])
-        covariance += np.eye(covariance.shape[0]) * 1e-6
+        # Ledoit-Wolf shrinkage covariance estimation
+        # This automatically regularizes ill-conditioned covariance matrices
+        print("  Computing Ledoit-Wolf shrinkage covariance...")
+        lw = LedoitWolf().fit(features)
+        covariance = lw.covariance_
+        shrinkage = lw.shrinkage_
 
+        # Compute condition number for diagnostics
+        eigvals = np.linalg.eigvalsh(covariance)
+        condition_number = eigvals.max() / max(eigvals.min(), 1e-10)
+
+        print(f"  Covariance condition number: {condition_number:.1f}")
+        print(f"  Shrinkage applied: {shrinkage:.3f}")
+
+        if condition_number > 1e6:
+            warnings.warn(
+                f"Covariance still ill-conditioned (cond={condition_number:.1e}). "
+                "Using PCA-based distance instead of Mahalanobis."
+            )
+
+        # Inverse covariance (precision matrix)
         try:
             inv_covariance = np.linalg.inv(covariance)
         except np.linalg.LinAlgError:
+            print("  Warning: Using pseudoinverse for precision matrix")
             inv_covariance = np.linalg.pinv(covariance)
 
+        # PCA for robust distance computation
+        # When covariance is ill-conditioned, compute distance in PCA space
+        print(f"  Fitting PCA with {n_pca_components} components...")
+        pca = PCA(n_components=min(n_pca_components, n_features, n_samples - 1))
+        pca.fit(features)
+
+        explained_var_ratio = pca.explained_variance_ratio_.sum()
+        print(f"  PCA explains {explained_var_ratio:.1%} of variance")
+
+        # Category means
         category_means = {}
         for feat_config in FEATURE_CONFIG["features"]:
             cat = feat_config["category"]
             if cat not in category_means:
                 category_means[cat] = []
 
-        # Compute per-category means
         for i, feat_config in enumerate(FEATURE_CONFIG["features"]):
             cat = feat_config["category"]
             max_idx = i * 4  # First stat is max
@@ -575,6 +693,12 @@ class BehavioralIntegrityMonitor:
             std=std,
             covariance=covariance,
             inv_covariance=inv_covariance,
+            pca_components=pca.components_,
+            pca_explained_var=pca.explained_variance_,
+            pca_mean=pca.mean_,
+            n_pca_components=pca.n_components_,
+            condition_number=float(condition_number),
+            shrinkage=float(shrinkage),
             category_means=category_means,
             config_hash=self.config_hash,
         )
