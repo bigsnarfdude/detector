@@ -9,6 +9,15 @@ __pycache__/
 *.safetensors
 activations_*.pt
 
+# Large data artifacts (can be regenerated)
+*.npy
+*.npz
+
+# Experiment result caches (large, regenerable)
+results/*/token_logs/
+results/*/*.npy
+results/*/*.pt
+
 # Virtual environments
 venv/
 .venv/
